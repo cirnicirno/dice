@@ -35,7 +35,7 @@
 
         .app {
             display: grid;
-            grid-template-rows:auto 1fr auto;
+            grid-template-rows:auto 1fr;
             min-height: 100dvh
         }
 
@@ -134,6 +134,41 @@
             position: relative
         }
 
+        /* выдвижная панель */
+        #history-panel {
+          position: absolute;
+          top: 12px;
+          right: 0;
+          width: min(340px, 70vw);
+          max-height: calc(100% - 24px);
+          overflow: auto;
+          z-index: 3;
+
+          background: rgba(20,24,32,.72);
+          backdrop-filter: blur(6px);
+          border: 1px solid rgba(255,255,255,.06);
+          border-radius: 12px 0 0 12px;
+          box-shadow: var(--shadow, 0 10px 30px rgba(0,0,0,.4));
+          padding: 12px;
+
+          /* скрыто за экраном по умолчанию */
+          transform: translateX(calc(100% + 12px));
+          transition: transform .28s ease, opacity .28s ease;
+          opacity: .98;
+          pointer-events: none; /* чтобы не ловила клики, пока скрыта */
+        }
+
+        /* открытое состояние */
+        #history-panel.is-open {
+          transform: translateX(0);
+          pointer-events: auto;
+        }
+
+        /* если пользователь просит меньше анимации — уберём переходы */
+        @media (prefers-reduced-motion: reduce) {
+          #history-panel { transition: none; }
+        }
+
         #stage {
             position: absolute;
             inset: 0
@@ -194,14 +229,22 @@
         }
 
         aside {
-            z-index: 2;
-            background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0));
-            border-top: 1px solid rgba(255, 255, 255, .06);
-            padding: .6rem 1rem;
-            display: flex;
-            gap: 1rem;
-            align-items: flex-start;
-            flex-wrap: wrap
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 3;
+          display: flex;
+          gap: 1rem;
+          align-items: flex-start;
+          flex-wrap: wrap;
+          padding: .6rem 1rem;
+          max-height: calc(100% - 24px);
+          overflow: auto;
+          background: rgba(20,24,32,.65);
+          backdrop-filter: blur(6px);
+          border: 1px solid rgba(255,255,255,.06);
+          border-radius: 12px;
+          box-shadow: var(--shadow);
         }
 
         .results {
@@ -276,22 +319,27 @@
             <button class="btn" id="reroll" title="R to reroll last">Reroll last</button>
             <button class="btn" id="clear" title="C to clear">Clear</button>
             <button class="btn" id="toggle-shake" title="Toggle camera shake" aria-pressed="false">Shake: On</button>
+            <button class="btn" id="toggle-history" aria-controls="history-panel" aria-expanded="false">
+              History: Show
+            </button>
         </div>
         <div id="joystick" role="application" aria-label="Camera joystick">
             <div class="stick"></div>
         </div>
-    </main>
-    <aside>
+      <aside id="history-panel">
         <div class="results" aria-live="polite">
-            <h3>Last roll</h3>
-            <div id="last" class="pill"><span>—</span></div>
-            <div class="pill"><span>Sum</span> <span class="sum" id="sum">—</span></div>
+          <h3>Last roll</h3>
+          <div id="last" class="pill"><span>—</span></div>
+          <div class="pill"><span>Sum</span> <span class="sum" id="sum">—</span></div>
         </div>
         <div>
-            <h3>History</h3>
-            <div id="history" class="history" aria-label="Results history"></div>
+          <h3>History</h3>
+          <div id="history" class="history" aria-label="Results history"></div>
         </div>
-    </aside>
+      </aside>
+
+    </main>
+
 </div>
 
 <script type="module">
@@ -300,10 +348,10 @@
     import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
 
     // ===== Config: Smaller playfield =====
-    const FIELD_W = 24;  // width (X)
-    const FIELD_H = 16;  // depth (Z)
+    const FIELD_W = 20;  // width (X)
+    const FIELD_H = 20;  // depth (Z)
     const WALL_THICK = 0.5;
-    const WALL_H = 1.25;
+    const WALL_H = 3.5;
 
     // ===== Utilities =====
     const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -339,6 +387,32 @@
         };
         return {click, resume: () => ctx && ctx.resume?.()};
     })();
+
+    const historyBtn = document.getElementById('toggle-history');
+    const historyPanel = document.getElementById('history-panel');
+
+    if (historyBtn && historyPanel) {
+      const setState = (open) => {
+        historyPanel.classList.toggle('is-open', open);
+        historyBtn.setAttribute('aria-expanded', String(open));
+        historyBtn.textContent = `History: ${open ? 'Hide' : 'Show'}`;
+      };
+
+      // начальное состояние — закрыто
+      setState(false);
+
+      historyBtn.addEventListener('click', () => {
+        const open = !historyPanel.classList.contains('is-open');
+        setState(open);
+      });
+
+      // закрывать по Esc
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && historyPanel.classList.contains('is-open')) {
+          setState(false);
+        }
+      });
+    }
 
     // ===== Scene setup =====
     const stageEl = document.getElementById('stage');
@@ -967,18 +1041,18 @@
 
     const shakeBtn = document.getElementById('toggle-shake');
     if (shakeBtn) {
-      // если у пользователя включено reduce-motion — начнём с выключенной тряски
-      if (prefersReduced) {
-        shakeEnabled = false;
-        shakeBtn.textContent = 'Shake: Off';
-        shakeBtn.setAttribute('aria-pressed', 'true');
-      }
-      shakeBtn.addEventListener('click', () => {
-        shakeEnabled = !shakeEnabled;
-        shakeBtn.textContent = `Shake: ${shakeEnabled ? 'On' : 'Off'}`;
-        shakeBtn.setAttribute('aria-pressed', String(!shakeEnabled));
-        if (!shakeEnabled) CameraShake.reset(); // сразу погасим текущую тряску
-      });
+        // если у пользователя включено reduce-motion — начнём с выключенной тряски
+        if (prefersReduced) {
+            shakeEnabled = false;
+            shakeBtn.textContent = 'Shake: Off';
+            shakeBtn.setAttribute('aria-pressed', 'true');
+        }
+        shakeBtn.addEventListener('click', () => {
+            shakeEnabled = !shakeEnabled;
+            shakeBtn.textContent = `Shake: ${shakeEnabled ? 'On' : 'Off'}`;
+            shakeBtn.setAttribute('aria-pressed', String(!shakeEnabled));
+            if (!shakeEnabled) CameraShake.reset(); // сразу погасим текущую тряску
+        });
     }
     // ===== Spawning & throwing =====
     const raycaster = new THREE.Raycaster();
