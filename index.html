@@ -1,114 +1,302 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DnD Dice Roller — 3D Physics (Three.js + cannon-es)</title>
-  <style>
-    :root{
-      --bg:#0b0d10; --panel:#12151c; --ink:#e9eef7; --muted:#8a93a3; --accent:#6ee7ff; --accent2:#b794f4;
-      --good:#9ae6b4; --warn:#f6ad55; --bad:#fc8181; --shadow:0 10px 30px rgba(0,0,0,.35);
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 60% -10%, #17202a, #0b0d10 55%);
-      color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,"Noto Sans",sans-serif}
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>DnD Dice Roller — 3D Physics (Three.js + cannon-es)</title>
+    <style>
+        :root {
+            --bg: #0b0d10;
+            --panel: #12151c;
+            --ink: #e9eef7;
+            --muted: #8a93a3;
+            --accent: #6ee7ff;
+            --accent2: #b794f4;
+            --good: #9ae6b4;
+            --warn: #f6ad55;
+            --bad: #fc8181;
+            --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+        }
 
-    .app{display:grid;grid-template-rows:auto 1fr auto;min-height:100dvh}
+        * {
+            box-sizing: border-box
+        }
 
-    header{position:relative;z-index:2;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
-      border-bottom:1px solid rgba(255,255,255,.06);padding:.75rem 1rem}
-    .bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
-    .title{font-weight:700;letter-spacing:.2px;margin-right:.5rem}
+        html, body {
+            height: 100%
+        }
 
-    .labels{display:flex;gap:.5rem;flex-wrap:wrap}
-    .die-label{user-select:none; position:relative; display:inline-flex; align-items:center; justify-content:center;
-      height:36px; padding:0 .8rem; border-radius:9999px; background:var(--panel); border:1px solid rgba(255,255,255,.08);
-      box-shadow:var(--shadow); cursor:pointer; transition:.2s transform,.2s background,.2s border-color;
-      outline:none; color:var(--ink)}
-    .die-label:active{ transform:scale(.97) }
-    .die-label[data-type="d4"]{--c:#60a5fa}
-    .die-label[data-type="d6"]{--c:#4ade80}
-    .die-label[data-type="d8"]{--c:#f472b6}
-    .die-label[data-type="d10"]{--c:#f59e0b}
-    .die-label[data-type="d12"]{--c:#22d3ee}
-    .die-label[data-type="d20"]{--c:#a78bfa}
-    .die-label[data-type="d100"]{--c:#fb7185}
-    .die-label::before{content:""; width:10px;height:10px;border-radius:50%;margin-right:.5rem;background:var(--c)}
-    .die-label:is(:hover,:focus-visible){border-color:var(--c); box-shadow:0 8px 30px rgba(0,0,0,.2)}
+        body {
+            margin: 0;
+            background: radial-gradient(1200px 800px at 60% -10%, #17202a, #0b0d10 55%);
+            color: var(--ink);
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, "Noto Sans", sans-serif
+        }
 
-    main{position:relative}
-    #stage{position:absolute; inset:0}
+        .app {
+            display: grid;
+            grid-template-rows:auto 1fr auto;
+            min-height: 100dvh
+        }
 
-    .ui{position:absolute; left:1rem; bottom:1rem; display:flex; gap:.5rem; z-index:3; flex-wrap:wrap}
-    .btn{appearance:none; border:none; background:var(--panel); color:var(--ink); padding:.6rem .9rem; border-radius:12px;
-      border:1px solid rgba(255,255,255,.08); box-shadow:var(--shadow); cursor:pointer; font-weight:700}
-    .btn:hover{border-color:var(--accent)}
+        header {
+            position: relative;
+            z-index: 2;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0));
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
+            padding: .75rem 1rem
+        }
 
-    /* On‑screen joystick */
-    #joystick{position:absolute; right:1rem; bottom:1rem; width:110px; height:110px; border-radius:50%;
-      background:radial-gradient(80px 80px at 50% 50%, rgba(255,255,255,.08), rgba(0,0,0,.2));
-      border:1px solid rgba(255,255,255,.08); box-shadow:var(--shadow); touch-action:none; z-index:4}
-    #joystick .stick{position:absolute; left:50%; top:50%; width:54px; height:54px; margin:-27px; border-radius:50%;
-      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.2);}
+        .bar {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+            align-items: center
+        }
 
-    aside{z-index:2; background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
-      border-top:1px solid rgba(255,255,255,.06); padding:.6rem 1rem; display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap}
-    .results{min-width:250px}
-    .results h3{margin:.2rem 0 .4rem;font-size:14px;color:var(--muted)}
-    .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .5rem;background:#131722;border-radius:999px;
-      border:1px solid rgba(255,255,255,.08); font-size:13px}
-    .pill .sum{font-weight:800}
-    .history{display:flex; gap:.35rem; flex-wrap:wrap}
+        .title {
+            font-weight: 700;
+            letter-spacing: .2px;
+            margin-right: .5rem
+        }
 
-    @media (max-width:720px){
-      .title{display:none}
-      .results{min-width:auto}
-    }
+        .labels {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap
+        }
 
-    @media (prefers-reduced-motion: reduce){ .die-label,.btn{transition:none} }
-  </style>
+        .die-label {
+            user-select: none;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 36px;
+            padding: 0 .8rem;
+            border-radius: 9999px;
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, .08);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            transition: .2s transform, .2s background, .2s border-color;
+            outline: none;
+            color: var(--ink)
+        }
+
+        .die-label:active {
+            transform: scale(.97)
+        }
+
+        .die-label[data-type="d4"] {
+            --c: #60a5fa
+        }
+
+        .die-label[data-type="d6"] {
+            --c: #4ade80
+        }
+
+        .die-label[data-type="d8"] {
+            --c: #f472b6
+        }
+
+        .die-label[data-type="d10"] {
+            --c: #f59e0b
+        }
+
+        .die-label[data-type="d12"] {
+            --c: #22d3ee
+        }
+
+        .die-label[data-type="d20"] {
+            --c: #a78bfa
+        }
+
+        .die-label[data-type="d100"] {
+            --c: #fb7185
+        }
+
+        .die-label::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: .5rem;
+            background: var(--c)
+        }
+
+        .die-label:is(:hover,:focus-visible) {
+            border-color: var(--c);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, .2)
+        }
+
+        main {
+            position: relative
+        }
+
+        #stage {
+            position: absolute;
+            inset: 0
+        }
+
+        .ui {
+            position: absolute;
+            left: 1rem;
+            bottom: 1rem;
+            display: flex;
+            gap: .5rem;
+            z-index: 3;
+            flex-wrap: wrap
+        }
+
+        .btn {
+            appearance: none;
+            border: none;
+            background: var(--panel);
+            color: var(--ink);
+            padding: .6rem .9rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, .08);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            font-weight: 700
+        }
+
+        .btn:hover {
+            border-color: var(--accent)
+        }
+
+        /* On‑screen joystick */
+        #joystick {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            background: radial-gradient(80px 80px at 50% 50%, rgba(255, 255, 255, .08), rgba(0, 0, 0, .2));
+            border: 1px solid rgba(255, 255, 255, .08);
+            box-shadow: var(--shadow);
+            touch-action: none;
+            z-index: 4
+        }
+
+        #joystick .stick {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 54px;
+            height: 54px;
+            margin: -27px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .15);
+            border: 1px solid rgba(255, 255, 255, .2);
+        }
+
+        aside {
+            z-index: 2;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0));
+            border-top: 1px solid rgba(255, 255, 255, .06);
+            padding: .6rem 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap
+        }
+
+        .results {
+            min-width: 250px
+        }
+
+        .results h3 {
+            margin: .2rem 0 .4rem;
+            font-size: 14px;
+            color: var(--muted)
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .2rem .5rem;
+            background: #131722;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .08);
+            font-size: 13px
+        }
+
+        .pill .sum {
+            font-weight: 800
+        }
+
+        .history {
+            display: flex;
+            gap: .35rem;
+            flex-wrap: wrap
+        }
+
+        @media (max-width: 720px) {
+            .title {
+                display: none
+            }
+
+            .results {
+                min-width: auto
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .die-label, .btn {
+                transition: none
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="app" id="app">
+<div class="app" id="app">
     <header>
-      <div class="bar" role="toolbar" aria-label="Dice bar">
-        <div class="title">DnD Dice Roller</div>
-        <div class="labels" id="labels">
-          <button class="die-label" data-type="d4" aria-label="Roll a D4" title="Roll a D4">d4</button>
-          <button class="die-label" data-type="d6" aria-label="Roll a D6" title="Roll a D6">d6</button>
-          <button class="die-label" data-type="d8" aria-label="Roll a D8" title="Roll a D8">d8</button>
-          <button class="die-label" data-type="d10" aria-label="Roll a D10" title="Roll a D10">d10</button>
-          <button class="die-label" data-type="d12" aria-label="Roll a D12" title="Roll a D12">d12</button>
-          <button class="die-label" data-type="d20" aria-label="Roll a D20" title="Roll a D20">d20</button>
-          <button class="die-label" data-type="d100" aria-label="Roll percentile (d100)" title="Roll percentile (d100)">d100</button>
+        <div class="bar" role="toolbar" aria-label="Dice bar">
+            <div class="title">DnD Dice Roller</div>
+            <div class="labels" id="labels">
+                <button class="die-label" data-type="d4" aria-label="Roll a D4" title="Roll a D4">d4</button>
+                <button class="die-label" data-type="d6" aria-label="Roll a D6" title="Roll a D6">d6</button>
+                <button class="die-label" data-type="d8" aria-label="Roll a D8" title="Roll a D8">d8</button>
+                <button class="die-label" data-type="d10" aria-label="Roll a D10" title="Roll a D10">d10</button>
+                <button class="die-label" data-type="d12" aria-label="Roll a D12" title="Roll a D12">d12</button>
+                <button class="die-label" data-type="d20" aria-label="Roll a D20" title="Roll a D20">d20</button>
+                <button class="die-label" data-type="d100" aria-label="Roll percentile (d100)"
+                        title="Roll percentile (d100)">d100
+                </button>
+            </div>
         </div>
-      </div>
     </header>
     <main>
-      <div id="stage" role="application" aria-label="3D dice stage"></div>
-      <div class="ui">
-        <button class="btn" id="reroll" title="R to reroll last">Reroll last</button>
-        <button class="btn" id="clear" title="C to clear">Clear</button>
-      </div>
-      <div id="joystick" role="application" aria-label="Camera joystick"><div class="stick"></div></div>
+        <div id="stage" role="application" aria-label="3D dice stage"></div>
+        <div class="ui">
+            <button class="btn" id="reroll" title="R to reroll last">Reroll last</button>
+            <button class="btn" id="clear" title="C to clear">Clear</button>
+            <button class="btn" id="toggle-shake" title="Toggle camera shake" aria-pressed="false">Shake: On</button>
+        </div>
+        <div id="joystick" role="application" aria-label="Camera joystick">
+            <div class="stick"></div>
+        </div>
     </main>
     <aside>
-      <div class="results" aria-live="polite">
-        <h3>Last roll</h3>
-        <div id="last" class="pill"><span>—</span></div>
-        <div class="pill"><span>Sum</span> <span class="sum" id="sum">—</span></div>
-      </div>
-      <div>
-        <h3>History</h3>
-        <div id="history" class="history" aria-label="Results history"></div>
-      </div>
+        <div class="results" aria-live="polite">
+            <h3>Last roll</h3>
+            <div id="last" class="pill"><span>—</span></div>
+            <div class="pill"><span>Sum</span> <span class="sum" id="sum">—</span></div>
+        </div>
+        <div>
+            <h3>History</h3>
+            <div id="history" class="history" aria-label="Results history"></div>
+        </div>
     </aside>
-  </div>
+</div>
 
-  <script type="module">
+<script type="module">
     import * as THREE from 'https://esm.sh/three@0.160.1';
-    import { OrbitControls } from 'https://esm.sh/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+    import {OrbitControls} from 'https://esm.sh/three@0.160.1/examples/jsm/controls/OrbitControls.js';
     import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
 
     // ===== Config: Smaller playfield =====
@@ -118,527 +306,1040 @@
     const WALL_H = 1.25;
 
     // ===== Utilities =====
-    const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-    const rand=(a,b)=>a+Math.random()*(b-a);
+    const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+    const rand = (a, b) => a + Math.random() * (b - a);
     const prefersReduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // ===== Audio (soft roll clicks via WebAudio, no external files) =====
-    const AudioSys = (()=>{
-      let ctx=null;
-      const ensure=()=>{ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return ctx };
-      const click=(gain=0.06, freq=220)=>{
-        const ac=ensure(); if(!ac) return; const o=ac.createOscillator(); const g=ac.createGain();
-        o.frequency.value=freq*rand(.9,1.3); o.type='triangle'; g.gain.value=gain; o.connect(g).connect(ac.destination);
-        const t=ac.currentTime; g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
-        o.start(t); o.stop(t+0.09);
-      };
-      return {click, resume:()=>ctx&&ctx.resume?.()};
+    const AudioSys = (() => {
+        let ctx = null;
+        const ensure = () => {
+            if (!ctx) {
+                try {
+                    ctx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                }
+            }
+            return ctx
+        };
+        const click = (gain = 0.06, freq = 220) => {
+            const ac = ensure();
+            if (!ac) return;
+            const o = ac.createOscillator();
+            const g = ac.createGain();
+            o.frequency.value = freq * rand(.9, 1.3);
+            o.type = 'triangle';
+            g.gain.value = gain;
+            o.connect(g).connect(ac.destination);
+            const t = ac.currentTime;
+            g.gain.setValueAtTime(gain, t);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+            o.start(t);
+            o.stop(t + 0.09);
+        };
+        return {click, resume: () => ctx && ctx.resume?.()};
     })();
 
     // ===== Scene setup =====
-    const stageEl=document.getElementById('stage');
-    const scene=new THREE.Scene();
-    scene.background=new THREE.Color(0x0b0d10);
+    const stageEl = document.getElementById('stage');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0d10);
 
-    const camera=new THREE.PerspectiveCamera(55, stageEl.clientWidth/stageEl.clientHeight, 0.1, 200);
+    const camera = new THREE.PerspectiveCamera(55, stageEl.clientWidth / stageEl.clientHeight, 0.1, 200);
     camera.position.set(7, 9.5, 11.5);
-    const cameraRig=new THREE.Group(); cameraRig.add(camera); scene.add(cameraRig);
+    const cameraRig = new THREE.Group();
+    cameraRig.add(camera);
+    scene.add(cameraRig);
 
-    const renderer=new THREE.WebGLRenderer({antialias:true, alpha:true});
+    const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
     renderer.setSize(stageEl.clientWidth, stageEl.clientHeight);
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
-    renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     stageEl.appendChild(renderer.domElement);
 
-    const controls=new OrbitControls(camera, renderer.domElement);
-    controls.enablePan=false; controls.enableZoom=false; controls.target.set(0,0.8,0);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false;
+    controls.enableZoom = false;
+    controls.target.set(0, 0.8, 0);
 
+    controls.minPolarAngle = THREE.MathUtils.degToRad(5);
+    controls.maxPolarAngle = THREE.MathUtils.degToRad(85);
     // Lights
-    const hemi=new THREE.HemisphereLight(0xeaf2ff,0x0a0a0a, 0.75); scene.add(hemi);
-    const dir=new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(10,14,6); dir.castShadow=true;
-    dir.shadow.mapSize.set(2048,2048); dir.shadow.camera.left=-20; dir.shadow.camera.right=20; dir.shadow.camera.top=20; dir.shadow.camera.bottom=-20; dir.shadow.camera.far=60; scene.add(dir);
+    const hemi = new THREE.HemisphereLight(0xeaf2ff, 0x0a0a0a, 0.75);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(10, 14, 6);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.left = -20;
+    dir.shadow.camera.right = 20;
+    dir.shadow.camera.top = 20;
+    dir.shadow.camera.bottom = -20;
+    dir.shadow.camera.far = 60;
+    scene.add(dir);
 
     // Ground with subtle texture (smaller)
-    const groundGeo=new THREE.PlaneGeometry(FIELD_W, FIELD_H,1,1);
-    const groundTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const ctx=c.getContext('2d');
-      ctx.fillStyle='#0f141b'; ctx.fillRect(0,0,256,256);
-      ctx.globalAlpha=.06; ctx.fillStyle='#fff';
-      for(let i=0;i<120;i++){ const x=rand(0,256), y=rand(0,256), r=rand(1,2.2); ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
-      const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(FIELD_W/2, FIELD_H/2); t.anisotropy=16; return t; })();
-    const groundMat=new THREE.MeshStandardMaterial({color:0x11161f, map:groundTex, roughness:0.95, metalness:0.0});
-    const ground=new THREE.Mesh(groundGeo, groundMat); ground.receiveShadow=true; ground.rotation.x=-Math.PI/2; scene.add(ground);
+    const groundGeo = new THREE.PlaneGeometry(FIELD_W, FIELD_H, 1, 1);
+    const groundTex = (() => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0f141b';
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.globalAlpha = .06;
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 120; i++) {
+            const x = rand(0, 256), y = rand(0, 256), r = rand(1, 2.2);
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(FIELD_W / 2, FIELD_H / 2);
+        t.anisotropy = 16;
+        return t;
+    })();
+    const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x11161f,
+        map: groundTex,
+        roughness: 0.95,
+        metalness: 0.0
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.receiveShadow = true;
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
 
     // ==== Physics world =====
-    const world=new CANNON.World({gravity:new CANNON.Vec3(0, -9.82, 0)});
-    world.broadphase=new CANNON.SAPBroadphase(world);
-    world.allowSleep=true;
-    const groundBody=new CANNON.Body({type:CANNON.Body.STATIC, shape:new CANNON.Plane(), material:new CANNON.Material('ground')});
-    groundBody.quaternion.setFromEuler(-Math.PI/2,0,0); world.addBody(groundBody);
-    const defaultMat=new CANNON.Material('dice');
-    const contact=new CANNON.ContactMaterial(defaultMat, groundBody.material, {friction:0.25, restitution:0.35});
+    const world = new CANNON.World({gravity: new CANNON.Vec3(0, -9.82, 0)});
+    world.broadphase = new CANNON.SAPBroadphase(world);
+    world.allowSleep = true;
+    const groundBody = new CANNON.Body({
+        type: CANNON.Body.STATIC,
+        shape: new CANNON.Plane(),
+        material: new CANNON.Material('ground')
+    });
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    world.addBody(groundBody);
+    const defaultMat = new CANNON.Material('dice');
+    const contact = new CANNON.ContactMaterial(defaultMat, groundBody.material, {friction: 0.25, restitution: 0.35});
     world.addContactMaterial(contact);
 
     // Build 4 low walls to confine dice within the smaller field
-    const walls=[];
-    const wallMat3 = new THREE.MeshStandardMaterial({color:0x0f141b, metalness:0.1, roughness:0.8, opacity:0.22, transparent:true});
-    function addWall(x, z, sx, sz){
-      const h=WALL_H;
-      const mesh=new THREE.Mesh(new THREE.BoxGeometry(sx, h, sz), wallMat3); mesh.position.set(x, h/2, z); mesh.castShadow=true; mesh.receiveShadow=true; scene.add(mesh);
-      const body=new CANNON.Body({type:CANNON.Body.STATIC, material:groundBody.material});
-      body.addShape(new CANNON.Box(new CANNON.Vec3(sx/2, h/2, sz/2)));
-      body.position.set(x, h/2, z); world.addBody(body);
-      walls.push({mesh: mesh, body: body});
+    const walls = [];
+    const wallMat3 = new THREE.MeshStandardMaterial({
+        color: 0x0f141b,
+        metalness: 0.1,
+        roughness: 0.8,
+        opacity: 0.22,
+        transparent: true
+    });
+
+    function addWall(x, z, sx, sz) {
+        const h = WALL_H;
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, h, sz), wallMat3);
+        mesh.position.set(x, h / 2, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        const body = new CANNON.Body({type: CANNON.Body.STATIC, material: groundBody.material});
+        body.addShape(new CANNON.Box(new CANNON.Vec3(sx / 2, h / 2, sz / 2)));
+        body.position.set(x, h / 2, z);
+        world.addBody(body);
+        walls.push({mesh: mesh, body: body});
     }
-    addWall(0,  FIELD_H/2 + WALL_THICK/2, FIELD_W + WALL_THICK*2, WALL_THICK);
-    addWall(0, -FIELD_H/2 - WALL_THICK/2, FIELD_W + WALL_THICK*2, WALL_THICK);
-    addWall( FIELD_W/2 + WALL_THICK/2, 0, WALL_THICK, FIELD_H + WALL_THICK*2);
-    addWall(-FIELD_W/2 - WALL_THICK/2, 0, WALL_THICK, FIELD_H + WALL_THICK*2);
+
+    addWall(0, FIELD_H / 2 + WALL_THICK / 2, FIELD_W + WALL_THICK * 2, WALL_THICK);
+    addWall(0, -FIELD_H / 2 - WALL_THICK / 2, FIELD_W + WALL_THICK * 2, WALL_THICK);
+    addWall(FIELD_W / 2 + WALL_THICK / 2, 0, WALL_THICK, FIELD_H + WALL_THICK * 2);
+    addWall(-FIELD_W / 2 - WALL_THICK / 2, 0, WALL_THICK, FIELD_H + WALL_THICK * 2);
 
     // ===== Winding fix helper: ensure triangles point outward (right‑hand rule) =====
-    function ensureOutwardTriangles(geometry){
-      const g=geometry.toNonIndexed();
-      const pos=new Float32Array(g.attributes.position.array);
-      let cx=0,cy=0,cz=0,count=0;
-      for(let i=0;i<pos.length;i+=3){ cx+=pos[i]; cy+=pos[i+1]; cz+=pos[i+2]; count++; }
-      cx/=count; cy/=count; cz/=count;
-      for(let i=0;i<pos.length;i+=9){
-        const ax=pos[i], ay=pos[i+1], az=pos[i+2];
-        const bx=pos[i+3], by=pos[i+4], bz=pos[i+5];
-        const cx1=pos[i+6], cy1=pos[i+7], cz1=pos[i+8];
-        const abx=bx-ax, aby=by-ay, abz=bz-az;
-        const acx=cx1-ax, acy=cy1-ay, acz=cz1-az;
-        const nx=aby*acz - abz*acy;
-        const ny=abz*acx - abx*acz;
-        const nz=abx*acy - aby*acx;
-        const fcx=(ax+bx+cx1)/3, fcy=(ay+by+cy1)/3, fcz=(az+bz+cz1)/3;
-        const ox=fcx-cx, oy=fcy-cy, oz=fcz-cz;
-        const dot=nx*ox + ny*oy + nz*oz;
-        if(dot<0){
-          // swap B and C to flip winding
-          const tbx=pos[i+3], tby=pos[i+4], tbz=pos[i+5];
-          pos[i+3]=pos[i+6]; pos[i+4]=pos[i+7]; pos[i+5]=pos[i+8];
-          pos[i+6]=tbx; pos[i+7]=tby; pos[i+8]=tbz;
+    function ensureOutwardTriangles(geometry) {
+        const g = geometry.toNonIndexed();
+        const pos = new Float32Array(g.attributes.position.array);
+        let cx = 0, cy = 0, cz = 0, count = 0;
+        for (let i = 0; i < pos.length; i += 3) {
+            cx += pos[i];
+            cy += pos[i + 1];
+            cz += pos[i + 2];
+            count++;
         }
-      }
-      const out=new THREE.BufferGeometry();
-      out.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
-      out.computeVertexNormals();
-      return out;
+        cx /= count;
+        cy /= count;
+        cz /= count;
+        for (let i = 0; i < pos.length; i += 9) {
+            const ax = pos[i], ay = pos[i + 1], az = pos[i + 2];
+            const bx = pos[i + 3], by = pos[i + 4], bz = pos[i + 5];
+            const cx1 = pos[i + 6], cy1 = pos[i + 7], cz1 = pos[i + 8];
+            const abx = bx - ax, aby = by - ay, abz = bz - az;
+            const acx = cx1 - ax, acy = cy1 - ay, acz = cz1 - az;
+            const nx = aby * acz - abz * acy;
+            const ny = abz * acx - abx * acz;
+            const nz = abx * acy - aby * acx;
+            const fcx = (ax + bx + cx1) / 3, fcy = (ay + by + cy1) / 3, fcz = (az + bz + cz1) / 3;
+            const ox = fcx - cx, oy = fcy - cy, oz = fcz - cz;
+            const dot = nx * ox + ny * oy + nz * oz;
+            if (dot < 0) {
+                // swap B and C to flip winding
+                const tbx = pos[i + 3], tby = pos[i + 4], tbz = pos[i + 5];
+                pos[i + 3] = pos[i + 6];
+                pos[i + 4] = pos[i + 7];
+                pos[i + 5] = pos[i + 8];
+                pos[i + 6] = tbx;
+                pos[i + 7] = tby;
+                pos[i + 8] = tbz;
+            }
+        }
+        const out = new THREE.BufferGeometry();
+        out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        out.computeVertexNormals();
+        return out;
     }
 
     // ===== Robust face grouping by plane (prevents duplicate labels on one face) =====
-    function groupFacesByPlane(geometry){
-      const g=geometry.toNonIndexed();
-      const pos=g.attributes.position.array;
-      const groups=[]; // {n:THREE.Vector3 (unit), d:number, center:THREE.Vector3, tris:int}
-      const tmpA=new THREE.Vector3(), tmpB=new THREE.Vector3(), tmpC=new THREE.Vector3();
-      const n=new THREE.Vector3();
-      const EPS_N = 1-1e-4;   // ~0.9999 cosine threshold (~0.57°)
-      const EPS_D = 1e-3;     // plane offset tolerance
-      for(let i=0;i<pos.length;i+=9){
-        tmpA.set(pos[i],pos[i+1],pos[i+2]);
-        tmpB.set(pos[i+3],pos[i+4],pos[i+5]);
-        tmpC.set(pos[i+6],pos[i+7],pos[i+8]);
-        n.subVectors(tmpB,tmpA).cross(tmpC.clone().sub(tmpA)).normalize();
-        const d = -n.dot(tmpA);
-        let found=null;
-        for(let j=0;j<groups.length;j++){
-          const g1=groups[j];
-          if(g1.n.dot(n) > EPS_N && Math.abs(g1.d - d) < EPS_D){ found=g1; break; }
+    function groupFacesByPlane(geometry) {
+        const g = geometry.toNonIndexed();
+        const pos = g.attributes.position.array;
+        const groups = []; // {n:THREE.Vector3 (unit), d:number, center:THREE.Vector3, tris:int}
+        const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3();
+        const n = new THREE.Vector3();
+        const EPS_N = 1 - 1e-4;   // ~0.9999 cosine threshold (~0.57°)
+        const EPS_D = 1e-3;     // plane offset tolerance
+        for (let i = 0; i < pos.length; i += 9) {
+            tmpA.set(pos[i], pos[i + 1], pos[i + 2]);
+            tmpB.set(pos[i + 3], pos[i + 4], pos[i + 5]);
+            tmpC.set(pos[i + 6], pos[i + 7], pos[i + 8]);
+            n.subVectors(tmpB, tmpA).cross(tmpC.clone().sub(tmpA)).normalize();
+            const d = -n.dot(tmpA);
+            let found = null;
+            for (let j = 0; j < groups.length; j++) {
+                const g1 = groups[j];
+                if (g1.n.dot(n) > EPS_N && Math.abs(g1.d - d) < EPS_D) {
+                    found = g1;
+                    break;
+                }
+            }
+            if (!found) {
+                found = {n: n.clone(), d, center: new THREE.Vector3(), tris: 0};
+                groups.push(found);
+            }
+            found.center.add(tmpA).add(tmpB).add(tmpC);
+            found.tris++;
         }
-        if(!found){ found={n:n.clone(), d, center:new THREE.Vector3(), tris:0}; groups.push(found); }
-        found.center.add(tmpA).add(tmpB).add(tmpC); found.tris++;
-      }
-      // finalize centers and normals
-      for(const g1 of groups){ g1.center.multiplyScalar(1/(g1.tris*3)); g1.n.normalize(); }
-      return groups.map(g1=>({normal:g1.n, center:g1.center}));
+        // finalize centers and normals
+        for (const g1 of groups) {
+            g1.center.multiplyScalar(1 / (g1.tris * 3));
+            g1.n.normalize();
+        }
+        return groups.map(g1 => ({normal: g1.n, center: g1.center}));
     }
 
     // Build CANNON.ConvexPolyhedron from THREE geometry with guaranteed outward face normals
-    function cannonConvexFromGeometry(geometry){
-      const g=geometry.toNonIndexed();
-      const pos=g.attributes.position.array;
-      const verts=[]; const vmap=new Map();
-      const add=(x,y,z)=>{ const k=`${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`; let idx=vmap.get(k); if(idx==null){ idx=verts.length; vmap.set(k, idx); verts.push(new CANNON.Vec3(x,y,z)); } return idx; };
-      let sumx=0,sumy=0,sumz=0,count=0;
-      for(let i=0;i<pos.length;i+=9){ sumx+=pos[i]+pos[i+3]+pos[i+6]; sumy+=pos[i+1]+pos[i+4]+pos[i+7]; sumz+=pos[i+2]+pos[i+5]+pos[i+8]; count+=3; }
-      const cx=sumx/count, cy=sumy/count, cz=sumz/count;
-      const faces=[];
-      for(let i=0;i<pos.length;i+=9){
-        const ax=pos[i], ay=pos[i+1], az=pos[i+2];
-        const bx=pos[i+3], by=pos[i+4], bz=pos[i+5];
-        const cx1=pos[i+6], cy1=pos[i+7], cz1=pos[i+8];
-        const ia=add(ax,ay,az), ib=add(bx,by,bz), ic=add(cx1,cy1,cz1);
-        const abx=bx-ax, aby=by-ay, abz=bz-az;
-        const acx=cx1-ax, acy=cy1-ay, acz=cz1-az;
-        const nx=aby*acz - abz*acy, ny=abz*acx - abx*acz, nz=abx*acy - aby*acx;
-        const fcx=(ax+bx+cx1)/3, fcy=(ay+by+cy1)/3, fcz=(az+bz+cz1)/3;
-        const ox=fcx-cx, oy=fcy-cy, oz=fcz-cz; const dot=nx*ox + ny*oy + nz*oz;
-        faces.push(dot>=0 ? [ia,ib,ic] : [ia,ic,ib]);
-      }
-      return new CANNON.ConvexPolyhedron({vertices:verts, faces});
+    function cannonConvexFromGeometry(geometry) {
+        const g = geometry.toNonIndexed();
+        const pos = g.attributes.position.array;
+        const verts = [];
+        const vmap = new Map();
+        const add = (x, y, z) => {
+            const k = `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
+            let idx = vmap.get(k);
+            if (idx == null) {
+                idx = verts.length;
+                vmap.set(k, idx);
+                verts.push(new CANNON.Vec3(x, y, z));
+            }
+            return idx;
+        };
+        let sumx = 0, sumy = 0, sumz = 0, count = 0;
+        for (let i = 0; i < pos.length; i += 9) {
+            sumx += pos[i] + pos[i + 3] + pos[i + 6];
+            sumy += pos[i + 1] + pos[i + 4] + pos[i + 7];
+            sumz += pos[i + 2] + pos[i + 5] + pos[i + 8];
+            count += 3;
+        }
+        const cx = sumx / count, cy = sumy / count, cz = sumz / count;
+        const faces = [];
+        for (let i = 0; i < pos.length; i += 9) {
+            const ax = pos[i], ay = pos[i + 1], az = pos[i + 2];
+            const bx = pos[i + 3], by = pos[i + 4], bz = pos[i + 5];
+            const cx1 = pos[i + 6], cy1 = pos[i + 7], cz1 = pos[i + 8];
+            const ia = add(ax, ay, az), ib = add(bx, by, bz), ic = add(cx1, cy1, cz1);
+            const abx = bx - ax, aby = by - ay, abz = bz - az;
+            const acx = cx1 - ax, acy = cy1 - ay, acz = cz1 - az;
+            const nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
+            const fcx = (ax + bx + cx1) / 3, fcy = (ay + by + cy1) / 3, fcz = (az + bz + cz1) / 3;
+            const ox = fcx - cx, oy = fcy - cy, oz = fcz - cz;
+            const dot = nx * ox + ny * oy + nz * oz;
+            faces.push(dot >= 0 ? [ia, ib, ic] : [ia, ic, ib]);
+        }
+        return new CANNON.ConvexPolyhedron({vertices: verts, faces});
     }
 
     // ===== Precise D10 (pentagonal trapezohedron) with explicit 10 faces =====
-    function createD10(radius=0.95){
-      const a=radius*1.06;
-      const ringY=radius*0.19;
-      const r=radius*0.78;
-      const V=[];
-      V.push(new THREE.Vector3(0, a, 0));
-      V.push(new THREE.Vector3(0,-a, 0));
-      for(let i=0;i<5;i++){ const ang=i*2*Math.PI/5; V.push(new THREE.Vector3(Math.cos(ang)*r,  ringY, Math.sin(ang)*r)); }
-      for(let i=0;i<5;i++){ const ang=i*2*Math.PI/5 + Math.PI/5; V.push(new THREE.Vector3(Math.cos(ang)*r,-ringY, Math.sin(ang)*r)); }
-      const tris=[];
-      for(let i=0;i<5;i++){ const ui=2+i, ui1=2+((i+1)%5), li=7+i; tris.push([0,ui,li],[0,li,ui1]); }
-      for(let i=0;i<5;i++){ const li=7+i, li1=7+((i+1)%5), ui=2+((i+1)%5); tris.push([1,li,ui],[1,ui,li1]); }
-      const pos=[]; for(const t of tris){ const A=V[t[0]],B=V[t[1]],C=V[t[2]]; pos.push(A.x,A.y,A.z,B.x,B.y,B.z,C.x,C.y,C.z); }
-      let geom=new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos),3));
-      geom.computeVertexNormals(); geom=ensureOutwardTriangles(geom);
-      const faces=[];
-      for(let i=0;i<5;i++){
-        const ui=2+i, ui1=2+((i+1)%5), li=7+i;
-        const verts=[0,ui,li,ui1].map(ix=>V[ix]);
-        const center=new THREE.Vector3(); verts.forEach(v=>center.add(v)); center.multiplyScalar(1/verts.length);
-        const normal=center.clone().normalize(); faces.push({normal, center});
-      }
-      for(let i=0;i<5;i++){
-        const li=7+i, li1=7+((i+1)%5), ui=2+((i+1)%5);
-        const verts=[1,li,ui,li1].map(ix=>V[ix]);
-        const center=new THREE.Vector3(); verts.forEach(v=>center.add(v)); center.multiplyScalar(1/verts.length);
-        const normal=center.clone().normalize(); faces.push({normal, center});
-      }
-      return {geometry: geom, faces};
+    function createD10(radius = 0.95) {
+        const a = radius * 1.06;
+        const ringY = radius * 0.19;
+        const r = radius * 0.78;
+        const V = [];
+        V.push(new THREE.Vector3(0, a, 0));
+        V.push(new THREE.Vector3(0, -a, 0));
+        for (let i = 0; i < 5; i++) {
+            const ang = i * 2 * Math.PI / 5;
+            V.push(new THREE.Vector3(Math.cos(ang) * r, ringY, Math.sin(ang) * r));
+        }
+        for (let i = 0; i < 5; i++) {
+            const ang = i * 2 * Math.PI / 5 + Math.PI / 5;
+            V.push(new THREE.Vector3(Math.cos(ang) * r, -ringY, Math.sin(ang) * r));
+        }
+        const tris = [];
+        for (let i = 0; i < 5; i++) {
+            const ui = 2 + i, ui1 = 2 + ((i + 1) % 5), li = 7 + i;
+            tris.push([0, ui, li], [0, li, ui1]);
+        }
+        for (let i = 0; i < 5; i++) {
+            const li = 7 + i, li1 = 7 + ((i + 1) % 5), ui = 2 + ((i + 1) % 5);
+            tris.push([1, li, ui], [1, ui, li1]);
+        }
+        const pos = [];
+        for (const t of tris) {
+            const A = V[t[0]], B = V[t[1]], C = V[t[2]];
+            pos.push(A.x, A.y, A.z, B.x, B.y, B.z, C.x, C.y, C.z);
+        }
+        let geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos), 3));
+        geom.computeVertexNormals();
+        geom = ensureOutwardTriangles(geom);
+        const faces = [];
+        for (let i = 0; i < 5; i++) {
+            const ui = 2 + i, ui1 = 2 + ((i + 1) % 5), li = 7 + i;
+            const verts = [0, ui, li, ui1].map(ix => V[ix]);
+            const center = new THREE.Vector3();
+            verts.forEach(v => center.add(v));
+            center.multiplyScalar(1 / verts.length);
+            const normal = center.clone().normalize();
+            faces.push({normal, center});
+        }
+        for (let i = 0; i < 5; i++) {
+            const li = 7 + i, li1 = 7 + ((i + 1) % 5), ui = 2 + ((i + 1) % 5);
+            const verts = [1, li, ui, li1].map(ix => V[ix]);
+            const center = new THREE.Vector3();
+            verts.forEach(v => center.add(v));
+            center.multiplyScalar(1 / verts.length);
+            const normal = center.clone().normalize();
+            faces.push({normal, center});
+        }
+        return {geometry: geom, faces};
     }
 
     // ===== Canvas textures =====
-    function makeFaceTexture(text, color='#f0f3f9'){
-      const size=256; const c=document.createElement('canvas'); c.width=c.height=size; const ctx=c.getContext('2d');
-      ctx.fillStyle='rgba(0,0,0,0)'; ctx.fillRect(0,0,size,size);
-      ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=10; ctx.beginPath(); ctx.arc(size/2,size/2,size*0.42,0,Math.PI*2); ctx.stroke();
-      ctx.fillStyle=color; ctx.font='bold 150px system-ui,Segoe UI,Roboto,Inter,Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(text,size/2,size/2+6);
-      const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; return tex;
+    function makeFaceTexture(text, color = '#f0f3f9') {
+        const size = 256;
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.fillRect(0, 0, size, size);
+        ctx.strokeStyle = 'rgba(255,255,255,.06)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.font = 'bold 150px system-ui,Segoe UI,Roboto,Inter,Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, size / 2, size / 2 + 6);
+        const tex = new THREE.CanvasTexture(c);
+        tex.anisotropy = 8;
+        return tex;
     }
-    function makeBubbleTexture(text){
-      const c=document.createElement('canvas'); c.width=c.height=192; const x=c.getContext('2d');
-      x.shadowColor='rgba(0,0,0,.6)'; x.shadowBlur=20; x.fillStyle='rgba(20,24,32,.96)';
-      x.beginPath(); x.arc(96,96,72,0,Math.PI*2); x.fill();
-      x.fillStyle='#e9eef7'; x.font='bold 86px system-ui,Segoe UI,Roboto'; x.textAlign='center'; x.textBaseline='middle';
-      x.fillText(text,96,103);
-      const t=new THREE.CanvasTexture(c); t.anisotropy=8; t.needsUpdate=true; return t;
+
+    function makeBubbleTexture(text) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 192;
+        const x = c.getContext('2d');
+        x.shadowColor = 'rgba(0,0,0,.6)';
+        x.shadowBlur = 20;
+        x.fillStyle = 'rgba(20,24,32,.96)';
+        x.beginPath();
+        x.arc(96, 96, 72, 0, Math.PI * 2);
+        x.fill();
+        x.fillStyle = '#e9eef7';
+        x.font = 'bold 86px system-ui,Segoe UI,Roboto';
+        x.textAlign = 'center';
+        x.textBaseline = 'middle';
+        x.fillText(text, 96, 103);
+        const t = new THREE.CanvasTexture(c);
+        t.anisotropy = 8;
+        t.needsUpdate = true;
+        return t;
     }
 
     // ===== Die factory =====
-    const DIE_COLORS={
-      d4:0x60a5fa, d6:0x4ade80, d8:0xf472b6, d10:0xf59e0b, d12:0x22d3ee, d20:0xa78bfa, d100:0xfb7185,
-      d10T:0xfb7185, d10U:0x22d3ee
+    const DIE_COLORS = {
+        d4: 0x60a5fa, d6: 0x4ade80, d8: 0xf472b6, d10: 0xf59e0b, d12: 0x22d3ee, d20: 0xa78bfa, d100: 0xfb7185,
+        d10T: 0xfb7185, d10U: 0x22d3ee
     };
-    const arrRange=(n,offset)=>Array.from({length:n},(_,i)=>i+offset);
+    const arrRange = (n, offset) => Array.from({length: n}, (_, i) => i + offset);
 
     class Die {
-      constructor(type, opts={}){
-        this.type=type; this.scale=opts.scale==null?1:opts.scale; this.group=new THREE.Group(); this.group.position.copy(opts.position||new THREE.Vector3());
-        this.value=null; this.asleepFrames=0; this.faceInfos=[]; this.rested=false; this.resultSprite=null; this.sizeY=1;
-        this._build();
-      }
-      _baseGeometry(){
-        const s=this.scale;
-        switch(this.type){
-          case 'd4': return new THREE.TetrahedronGeometry(0.8*s);
-          case 'd6': return new THREE.BoxGeometry(1.2*s,1.2*s,1.2*s);
-          case 'd8': return new THREE.OctahedronGeometry(0.95*s);
-          case 'd12': return new THREE.DodecahedronGeometry(0.95*s);
-          case 'd20': return new THREE.IcosahedronGeometry(1.05*s);
-          case 'd10': case 'd10T': case 'd10U': return null;
-          default: return new THREE.BoxGeometry(1*s,1*s,1*s);
+        constructor(type, opts = {}) {
+            this.type = type;
+            this.scale = opts.scale == null ? 1 : opts.scale;
+            this.group = new THREE.Group();
+            this.group.position.copy(opts.position || new THREE.Vector3());
+            this.value = null;
+            this.asleepFrames = 0;
+            this.faceInfos = [];
+            this.rested = false;
+            this.resultSprite = null;
+            this.sizeY = 1;
+            this._build();
         }
-      }
-      _numbers(){
-        switch(this.type){
-          case 'd4': return arrRange(4,1);
-          case 'd6': return arrRange(6,1);
-          case 'd8': return arrRange(8,1);
-          case 'd10': return arrRange(10,1);
-          case 'd10T': return Array.from({length:10},(_,i)=>i*10);
-          case 'd10U': return arrRange(10,0);
-          case 'd12': return arrRange(12,1);
-          case 'd20': return arrRange(20,1);
-        }
-      }
-      _build(){
-        const color=DIE_COLORS[this.type]||0xffffff;
-        let geo, faceList;
-        if(this.type==='d10' || this.type==='d10T' || this.type==='d10U'){
-          const d10=createD10(0.95*this.scale); geo=d10.geometry; faceList=d10.faces;
-        } else {
-          geo=ensureOutwardTriangles(this._baseGeometry()); faceList=groupFacesByPlane(geo);
-        }
-        const mat=new THREE.MeshStandardMaterial({color, roughness:0.45, metalness:0.15});
-        const mesh=new THREE.Mesh(geo, mat); mesh.castShadow=true; mesh.receiveShadow=false; this.mesh=mesh; this.group.add(mesh);
 
-        geo.computeBoundingBox?.(); if(geo.boundingBox){ this.sizeY = geo.boundingBox.max.y - geo.boundingBox.min.y; }
-
-        let faces=faceList;
-        if(!(this.type==='d10'||this.type==='d10T'||this.type==='d10U')){
-          faces=faceList.slice().sort((A,B)=>{ const ay=Math.atan2(A.normal.z, A.normal.x); const by=Math.atan2(B.normal.z, B.normal.x); return ay-by; });
+        _baseGeometry() {
+            const s = this.scale;
+            switch (this.type) {
+                case 'd4':
+                    return new THREE.TetrahedronGeometry(0.8 * s);
+                case 'd6':
+                    return new THREE.BoxGeometry(1.2 * s, 1.2 * s, 1.2 * s);
+                case 'd8':
+                    return new THREE.OctahedronGeometry(0.95 * s);
+                case 'd12':
+                    return new THREE.DodecahedronGeometry(0.95 * s);
+                case 'd20':
+                    return new THREE.IcosahedronGeometry(1.05 * s);
+                case 'd10':
+                case 'd10T':
+                case 'd10U':
+                    return null;
+                default:
+                    return new THREE.BoxGeometry(1 * s, 1 * s, 1 * s);
+            }
         }
-        const nums=this._numbers();
-        faces.forEach((f,i)=>{
-          const val=nums[i % nums.length];
-          const size=this.type==='d20'?0.5: this.type==='d12'?0.6: (this.type==='d10'||this.type==='d10T'||this.type==='d10U')?0.62: this.type==='d8'?0.55: this.type==='d4'?0.45: 0.7;
-          const label = (this.type==='d10T' ? (val===0?'00':String(val)) : String(val));
-          const plane=new THREE.Mesh(new THREE.PlaneGeometry(size,size), new THREE.MeshBasicMaterial({map:makeFaceTexture(label), transparent:true}));
-          const q=new THREE.Quaternion(); q.setFromUnitVectors(new THREE.Vector3(0,0,1), f.normal);
-          plane.quaternion.copy(q);
-          const center=f.center.clone().add(f.normal.clone().multiplyScalar(0.02));
-          plane.position.copy(center);
-          plane.renderOrder=1; this.group.add(plane);
-          this.faceInfos.push({value:val, normal:f.normal.clone(), center:f.center.clone()});
-        });
 
-        let shape;
-        if(this.type==='d6'){
-          const bb=geo.boundingBox; const hx=(bb.max.x-bb.min.x)/2, hy=(bb.max.y-bb.min.y)/2, hz=(bb.max.z-bb.min.z)/2;
-          shape=new CANNON.Box(new CANNON.Vec3(hx,hy,hz));
-        } else {
-          shape=cannonConvexFromGeometry(geo);
+        _numbers() {
+            switch (this.type) {
+                case 'd4':
+                    return arrRange(4, 1);
+                case 'd6':
+                    return arrRange(6, 1);
+                case 'd8':
+                    return arrRange(8, 1);
+                case 'd10':
+                    return arrRange(10, 1);
+                case 'd10T':
+                    return Array.from({length: 10}, (_, i) => i * 10);
+                case 'd10U':
+                    return arrRange(10, 0);
+                case 'd12':
+                    return arrRange(12, 1);
+                case 'd20':
+                    return arrRange(20, 1);
+            }
         }
-        const mass = 1.2 * (this.type==='d20'?1.15:1.0);
-        const body=new CANNON.Body({mass, shape, material:defaultMat, linearDamping:0.01, angularDamping:0.01, sleepTimeLimit:0.25, sleepSpeedLimit:0.1});
-        body.position.copy(this.group.position);
-        world.addBody(body);
-        this.body=body;
 
-        body.addEventListener('collide', (e)=>{
-          const rel=e.contact.getImpactVelocityAlongNormal ? Math.abs(e.contact.getImpactVelocityAlongNormal()) : e.contact.bi.velocity.length();
-          if(rel>0.4){ AudioSys.click(clamp(rel*0.02,0.03,0.12), 160+rel*60); CameraShake.bump(rel*0.01); }
-        });
-      }
-      setLinearAndAngularVelocity(v3, w3){ this.body.velocity.copy(v3); this.body.angularVelocity.copy(w3); }
-      updateFromPhysics(){ this.group.position.copy(this.body.position); this.group.quaternion.copy(this.body.quaternion); if(this.resultSprite){ this.resultSprite.position.set(this.group.position.x, this.group.position.y + this.sizeY*0.9 + 0.4, this.group.position.z); } }
-      checkRest(){ const speed=this.body.velocity.length(); const rs=this.body.angularVelocity.length(); if(speed<0.05 && rs<0.05) this.asleepFrames++; else this.asleepFrames=0; if(!this.rested && this.asleepFrames>18){ this.rested=true; this.value=this._faceUpValue(); this._ensureResultBubble(); } }
-      _ensureResultBubble(){ if(this.resultSprite){ return; } if(this.value==null){ return; } let label=String(this.value); if(this.type==='d10T') label=(this.value===0?'00':String(this.value)); const tex=makeBubbleTexture(label); const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:true})); sprite.scale.set(0.9,0.9,0.9); sprite.position.set(this.group.position.x, this.group.position.y + this.sizeY*0.9 + 0.4, this.group.position.z); scene.add(sprite); this.resultSprite=sprite; this.resultSprite._tex=tex; }
-      _faceUpValue(){ let best=null, bestDot=-1; const up=new THREE.Vector3(0,1,0); for(const info of this.faceInfos){ const n=info.normal.clone().applyQuaternion(this.group.quaternion); const d=n.dot(up); if(d>bestDot){ bestDot=d; best=info; } } return best?best.value:null; }
-      dispose(){ if(this.resultSprite){ scene.remove(this.resultSprite); this.resultSprite.material.map?.dispose?.(); this.resultSprite.material.dispose?.(); this.resultSprite=null; } world.removeBody(this.body); scene.remove(this.group); this.group.traverse(o=>{ if(o.geometry) o.geometry.dispose?.(); if(o.material){ if(o.material.map) o.material.map.dispose?.(); o.material.dispose?.(); } }); }
+        _build() {
+            const color = DIE_COLORS[this.type] || 0xffffff;
+            let geo, faceList;
+            if (this.type === 'd10' || this.type === 'd10T' || this.type === 'd10U') {
+                const d10 = createD10(0.95 * this.scale);
+                geo = d10.geometry;
+                faceList = d10.faces;
+            } else {
+                geo = ensureOutwardTriangles(this._baseGeometry());
+                faceList = groupFacesByPlane(geo);
+            }
+            const mat = new THREE.MeshStandardMaterial({color, roughness: 0.45, metalness: 0.15});
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = false;
+            this.mesh = mesh;
+            this.group.add(mesh);
+
+            geo.computeBoundingBox?.();
+            if (geo.boundingBox) {
+                this.sizeY = geo.boundingBox.max.y - geo.boundingBox.min.y;
+            }
+
+            let faces = faceList;
+            if (!(this.type === 'd10' || this.type === 'd10T' || this.type === 'd10U')) {
+                faces = faceList.slice().sort((A, B) => {
+                    const ay = Math.atan2(A.normal.z, A.normal.x);
+                    const by = Math.atan2(B.normal.z, B.normal.x);
+                    return ay - by;
+                });
+            }
+            const nums = this._numbers();
+            faces.forEach((f, i) => {
+                const val = nums[i % nums.length];
+                const size = this.type === 'd20' ? 0.5 : this.type === 'd12' ? 0.6 : (this.type === 'd10' || this.type === 'd10T' || this.type === 'd10U') ? 0.62 : this.type === 'd8' ? 0.55 : this.type === 'd4' ? 0.45 : 0.7;
+                const label = (this.type === 'd10T' ? (val === 0 ? '00' : String(val)) : String(val));
+                const plane = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({
+                    map: makeFaceTexture(label),
+                    transparent: true
+                }));
+                const q = new THREE.Quaternion();
+                q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), f.normal);
+                plane.quaternion.copy(q);
+                const center = f.center.clone().add(f.normal.clone().multiplyScalar(0.02));
+                plane.position.copy(center);
+                plane.renderOrder = 1;
+                this.group.add(plane);
+                this.faceInfos.push({value: val, normal: f.normal.clone(), center: f.center.clone()});
+            });
+
+            let shape;
+            if (this.type === 'd6') {
+                const bb = geo.boundingBox;
+                const hx = (bb.max.x - bb.min.x) / 2, hy = (bb.max.y - bb.min.y) / 2, hz = (bb.max.z - bb.min.z) / 2;
+                shape = new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+            } else {
+                shape = cannonConvexFromGeometry(geo);
+            }
+            const mass = 1.2 * (this.type === 'd20' ? 1.15 : 1.0);
+            const body = new CANNON.Body({
+                mass,
+                shape,
+                material: defaultMat,
+                linearDamping: 0.01,
+                angularDamping: 0.01,
+                sleepTimeLimit: 0.25,
+                sleepSpeedLimit: 0.1
+            });
+            body.position.copy(this.group.position);
+            world.addBody(body);
+            this.body = body;
+
+            body.addEventListener('collide', (e) => {
+                const rel = e.contact.getImpactVelocityAlongNormal ? Math.abs(e.contact.getImpactVelocityAlongNormal()) : e.contact.bi.velocity.length();
+                if (rel > 0.4) {
+                    AudioSys.click(clamp(rel * 0.02, 0.03, 0.12), 160 + rel * 60);
+                    CameraShake.bump(rel * 0.01);
+                }
+            });
+        }
+
+        setLinearAndAngularVelocity(v3, w3) {
+            this.body.velocity.copy(v3);
+            this.body.angularVelocity.copy(w3);
+        }
+
+        updateFromPhysics() {
+            this.group.position.copy(this.body.position);
+            this.group.quaternion.copy(this.body.quaternion);
+            if (this.resultSprite) {
+                this.resultSprite.position.set(this.group.position.x, this.group.position.y + this.sizeY * 0.9 + 0.4, this.group.position.z);
+            }
+        }
+
+        checkRest() {
+            const speed = this.body.velocity.length();
+            const rs = this.body.angularVelocity.length();
+            if (speed < 0.05 && rs < 0.05) this.asleepFrames++; else this.asleepFrames = 0;
+            if (!this.rested && this.asleepFrames > 18) {
+                this.rested = true;
+                this.value = this._faceUpValue();
+                this._ensureResultBubble();
+            }
+        }
+
+        _ensureResultBubble() {
+            if (this.resultSprite) {
+                return;
+            }
+            if (this.value == null) {
+                return;
+            }
+            let label = String(this.value);
+            if (this.type === 'd10T') label = (this.value === 0 ? '00' : String(this.value));
+            const tex = makeBubbleTexture(label);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, depthTest: true}));
+            sprite.scale.set(0.9, 0.9, 0.9);
+            sprite.position.set(this.group.position.x, this.group.position.y + this.sizeY * 0.9 + 0.4, this.group.position.z);
+            scene.add(sprite);
+            this.resultSprite = sprite;
+            this.resultSprite._tex = tex;
+        }
+
+        _faceUpValue() {
+            let best = null, bestDot = -1;
+            const up = new THREE.Vector3(0, 1, 0);
+            for (const info of this.faceInfos) {
+                const n = info.normal.clone().applyQuaternion(this.group.quaternion);
+                const d = n.dot(up);
+                if (d > bestDot) {
+                    bestDot = d;
+                    best = info;
+                }
+            }
+            return best ? best.value : null;
+        }
+
+        dispose() {
+            if (this.resultSprite) {
+                scene.remove(this.resultSprite);
+                this.resultSprite.material.map?.dispose?.();
+                this.resultSprite.material.dispose?.();
+                this.resultSprite = null;
+            }
+            world.removeBody(this.body);
+            scene.remove(this.group);
+            this.group.traverse(o => {
+                if (o.geometry) o.geometry.dispose?.();
+                if (o.material) {
+                    if (o.material.map) o.material.map.dispose?.();
+                    o.material.dispose?.();
+                }
+            });
+        }
     }
 
     // Camera shake system
-    const CameraShake = (()=>{
-      // Shake the *rig* instead of the camera so we don't overwrite OrbitControls position/orbit.
-      let amp = 0;                   // current shake amplitude
-      const rigBase = new THREE.Vector3(0,0,0); // cameraRig starts at origin
-      const tmp = new THREE.Vector3();
-      function bump(x){ if(prefersReduced) return; amp = Math.min(0.5, amp + x); }
-      function update(){
-        if(amp <= 0.0001){
-          // Snap rig back to origin when shake fades
-          if(cameraRig.position.lengthSq() > 1e-8) cameraRig.position.set(0,0,0);
-          return;
+    let shakeEnabled = true;
+    const CameraShake = (() => {
+        // Shake the *rig* instead of the camera so we don't overwrite OrbitControls position/orbit.
+        let amp = 0;                   // current shake amplitude
+        const rigBase = new THREE.Vector3(0, 0, 0); // cameraRig starts at origin
+        const tmp = new THREE.Vector3();
+
+        function bump(x) {
+            if (prefersReduced || !shakeEnabled) return;
+            amp = Math.min(0.5, amp + x);
         }
-        amp *= 0.90; // decay
-        tmp.set(rand(-amp,amp), rand(-amp,amp), rand(-amp,amp));
-        cameraRig.position.copy(rigBase).add(tmp);
-      }
-      function reset(){ amp = 0; cameraRig.position.set(0,0,0); }
-      return { bump, update, reset };
+
+        function update() {
+            if (amp <= 0.0001) {
+                // Snap rig back to origin when shake fades
+                if (cameraRig.position.lengthSq() > 1e-8) cameraRig.position.set(0, 0, 0);
+                return;
+            }
+            amp *= 0.90; // decay
+            tmp.set(rand(-amp, amp), rand(-amp, amp), rand(-amp, amp));
+            cameraRig.position.copy(rigBase).add(tmp);
+        }
+
+        function reset() {
+            amp = 0;
+            cameraRig.position.set(0, 0, 0);
+        }
+
+        return {bump, update, reset};
     })();
 
     // ===== Dice / Roll manager =====
-    const Dice={ list:[], lastSpec:[], currentRoll:null, reportedRollId:null };
-    Dice.add=(die)=>{ scene.add(die.group); Dice.list.push(die); };
-    Dice.clear=()=>{ Dice.list.forEach(d=>d.dispose()); Dice.list.length=0; updateLastUI([], null); CameraShake.reset(); Dice.currentRoll=null; };
-    Dice.rerollLast=(origin=null, impulse=null)=>{ if(!Dice.lastSpec.length) return; Dice.clear(); spawnDiceBundle(Dice.lastSpec, origin, impulse); };
+    const Dice = {list: [], lastSpec: [], currentRoll: null, reportedRollId: null};
+    Dice.add = (die) => {
+        scene.add(die.group);
+        Dice.list.push(die);
+    };
+    Dice.clear = () => {
+        Dice.list.forEach(d => d.dispose());
+        Dice.list.length = 0;
+        updateLastUI([], null);
+        CameraShake.reset();
+        Dice.currentRoll = null;
+    };
+    Dice.rerollLast = (origin = null, impulse = null) => {
+        if (!Dice.lastSpec.length) return;
+        Dice.clear();
+        spawnDiceBundle(Dice.lastSpec, origin, impulse);
+    };
 
     // ===== Simple tap/click to roll (better mobile) =====
-    const labelsEl=document.getElementById('labels');
-    labelsEl.addEventListener('click', (e)=>{
-      const el=e.target.closest('.die-label'); if(!el) return; const type=el.dataset.type;
-      AudioSys.resume?.();
-      const rect=stageEl.getBoundingClientRect();
-      const origin={x:rect.width/2, y:rect.height*0.35};
-      const dir=new THREE.Vector3(rand(-1,1), rand(0.5,1.2), -1).normalize();
-      const speed=rand(0.9,1.6);
-      const impulse=dir.multiplyScalar(speed);
-      spawnDiceBundle([type], origin, impulse);
-    }, {passive:true});
+    const labelsEl = document.getElementById('labels');
+    labelsEl.addEventListener('click', (e) => {
+        const el = e.target.closest('.die-label');
+        if (!el) return;
+        const type = el.dataset.type;
+        AudioSys.resume?.();
+        const rect = stageEl.getBoundingClientRect();
+        const origin = {x: rect.width / 2, y: rect.height * 0.35};
+        const dir = new THREE.Vector3(rand(-1, 1), rand(0.5, 1.2), -1).normalize();
+        const speed = rand(0.9, 1.6);
+        const impulse = dir.multiplyScalar(speed);
+        spawnDiceBundle([type], origin, impulse);
+    }, {passive: true});
 
-    // ===== Spawning & throwing =====
-    const raycaster=new THREE.Raycaster(); const plane=new THREE.Plane(new THREE.Vector3(0,1,0), 0);
-    function screenToGround(x,y){ const ndc=new THREE.Vector2((x/renderer.domElement.clientWidth)*2-1, -(y/renderer.domElement.clientHeight)*2+1); raycaster.setFromCamera(ndc, camera); const pt=new THREE.Vector3(); raycaster.ray.intersectPlane(plane, pt); return pt; }
-    function clampToField(v){ v.x = clamp(v.x, -FIELD_W*0.45, FIELD_W*0.45); v.z = clamp(v.z, -FIELD_H*0.45, FIELD_H*0.45); return v; }
-
-    function expandTypes(types){
-      const physical=[]; const groups=[];
-      for(const t of types){
-        if(t==='d100'){
-          const tens='d10T', units='d10U';
-          physical.push(tens, units);
-          groups.push({kind:'percentile', tens:tens, units:units});
-        } else {
-          physical.push(t); groups.push({kind:'single', type:t});
-        }
+    const shakeBtn = document.getElementById('toggle-shake');
+    if (shakeBtn) {
+      // если у пользователя включено reduce-motion — начнём с выключенной тряски
+      if (prefersReduced) {
+        shakeEnabled = false;
+        shakeBtn.textContent = 'Shake: Off';
+        shakeBtn.setAttribute('aria-pressed', 'true');
       }
-      return {physical, groups};
+      shakeBtn.addEventListener('click', () => {
+        shakeEnabled = !shakeEnabled;
+        shakeBtn.textContent = `Shake: ${shakeEnabled ? 'On' : 'Off'}`;
+        shakeBtn.setAttribute('aria-pressed', String(!shakeEnabled));
+        if (!shakeEnabled) CameraShake.reset(); // сразу погасим текущую тряску
+      });
+    }
+    // ===== Spawning & throwing =====
+    const raycaster = new THREE.Raycaster();
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+    function screenToGround(x, y) {
+        const ndc = new THREE.Vector2((x / renderer.domElement.clientWidth) * 2 - 1, -(y / renderer.domElement.clientHeight) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        const pt = new THREE.Vector3();
+        raycaster.ray.intersectPlane(plane, pt);
+        return pt;
     }
 
-    function spawnDiceBundle(types, originScreen, impulse){
-      const {physical, groups}=expandTypes(types);
-      const origin3=clampToField(screenToGround(originScreen.x, originScreen.y)).add(new THREE.Vector3(0, 2.0, 0));
-      const spread=0.5; const sameImpulse=impulse.clone();
-      const items=[]; const id=(Date.now()+Math.random()).toString(36);
-      physical.forEach((t)=>{
-        const offset=new THREE.Vector3(rand(-spread,spread), rand(0.2,0.6), rand(-spread,spread));
-        const die=new Die(t,{position: origin3.clone().add(offset)});
-        Dice.add(die); items.push(die);
-        const lin=new CANNON.Vec3(sameImpulse.x + rand(-0.25,0.25), Math.abs(sameImpulse.y)+rand(0.2,0.6), sameImpulse.z + rand(-0.25,0.25));
-        const ang=new CANNON.Vec3(rand(-8,8), rand(-8,8), rand(-8,8));
-        die.setLinearAndAngularVelocity(lin, ang);
-      });
-      Dice.lastSpec=types.slice();
-      Dice.currentRoll={id, items, groups};
+    function clampToField(v) {
+        v.x = clamp(v.x, -FIELD_W * 0.45, FIELD_W * 0.45);
+        v.z = clamp(v.z, -FIELD_H * 0.45, FIELD_H * 0.45);
+        return v;
+    }
+
+    function expandTypes(types) {
+        const physical = [];
+        const groups = [];
+        for (const t of types) {
+            if (t === 'd100') {
+                const tens = 'd10T', units = 'd10U';
+                physical.push(tens, units);
+                groups.push({kind: 'percentile', tens: tens, units: units});
+            } else {
+                physical.push(t);
+                groups.push({kind: 'single', type: t});
+            }
+        }
+        return {physical, groups};
+    }
+
+    function spawnDiceBundle(types, originScreen, impulse) {
+        const {physical, groups} = expandTypes(types);
+        const origin3 = clampToField(screenToGround(originScreen.x, originScreen.y)).add(new THREE.Vector3(0, 2.0, 0));
+        const spread = 0.5;
+        const sameImpulse = impulse.clone();
+        const items = [];
+        const id = (Date.now() + Math.random()).toString(36);
+        physical.forEach((t) => {
+            const offset = new THREE.Vector3(rand(-spread, spread), rand(0.2, 0.6), rand(-spread, spread));
+            const die = new Die(t, {position: origin3.clone().add(offset)});
+            Dice.add(die);
+            items.push(die);
+            const lin = new CANNON.Vec3(sameImpulse.x + rand(-0.25, 0.25), Math.abs(sameImpulse.y) + rand(0.2, 0.6), sameImpulse.z + rand(-0.25, 0.25));
+            const ang = new CANNON.Vec3(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+            die.setLinearAndAngularVelocity(lin, ang);
+        });
+        Dice.lastSpec = types.slice();
+        Dice.currentRoll = {id, items, groups};
     }
 
     // ===== UI (results & history) =====
-    const lastEl=document.getElementById('last'); const sumEl=document.getElementById('sum'); const historyEl=document.getElementById('history');
+    const lastEl = document.getElementById('last');
+    const sumEl = document.getElementById('sum');
+    const historyEl = document.getElementById('history');
 
-    function computeRollSummary(roll){
-      const values=[]; const labels=[]; let total=0;
-      const findDie=(code)=>roll.items.find(d=>d.type===code);
-      for(const g of roll.groups){
-        if(g.kind==='single'){
-          const die=roll.items.find(d=>d.type===g.type && d.rested);
-          if(!die) return null; values.push(die.value); labels.push(g.type); total+= +values[values.length-1];
-        } else if(g.kind==='percentile'){
-          const td=findDie('d10T'); const ud=findDie('d10U');
-          if(!(td&&ud) || !(td.rested && ud.rested)) return null;
-          const tens=td.value; const units=ud.value;
-          const combined = (tens===0 && units===0) ? 100 : (tens + units);
-          values.push(combined);
-          labels.push('d100');
-          total+=combined;
+    function computeRollSummary(roll) {
+        const values = [];
+        const labels = [];
+        let total = 0;
+        const findDie = (code) => roll.items.find(d => d.type === code);
+        for (const g of roll.groups) {
+            if (g.kind === 'single') {
+                const die = roll.items.find(d => d.type === g.type && d.rested);
+                if (!die) return null;
+                values.push(die.value);
+                labels.push(g.type);
+                total += +values[values.length - 1];
+            } else if (g.kind === 'percentile') {
+                const td = findDie('d10T');
+                const ud = findDie('d10U');
+                if (!(td && ud) || !(td.rested && ud.rested)) return null;
+                const tens = td.value;
+                const units = ud.value;
+                const combined = (tens === 0 && units === 0) ? 100 : (tens + units);
+                values.push(combined);
+                labels.push('d100');
+                total += combined;
+            }
         }
-      }
-      return {values, labels, total};
+        return {values, labels, total};
     }
 
-    function updateLastUI(values, types){ lastEl.innerHTML = values.length ? values.map((v,i)=>`<span class=\"chip\">${types?types[i]:''}${types?':':''}${v}</span>`).join(' ') : '<span>—</span>'; sumEl.textContent= values.length? String(values.reduce((a,b)=>a+(+b||0),0)) : '—'; }
-    function pushHistory(values, types){ const div=document.createElement('div'); div.className='pill'; const label=types?types.join('+'):''; div.textContent = `${label} → ${values.join(', ')} (Σ ${values.reduce((a,b)=>a+(+b||0),0)})`; historyEl.prepend(div); }
+    function updateLastUI(values, types) {
+        lastEl.innerHTML = values.length ? values.map((v, i) => `<span class=\"chip\">${types ? types[i] : ''}${types ? ':' : ''}${v}</span>`).join(' ') : '<span>—</span>';
+        sumEl.textContent = values.length ? String(values.reduce((a, b) => a + (+b || 0), 0)) : '—';
+    }
 
-    document.getElementById('clear').addEventListener('click', ()=>Dice.clear());
-    document.getElementById('reroll').addEventListener('click', ()=>Dice.rerollLast());
-    window.addEventListener('keydown', (e)=>{ if(e.key==='r' || e.key==='R') Dice.rerollLast(); if(e.key==='c'||e.key==='C') Dice.clear(); });
+    function pushHistory(values, types) {
+        const div = document.createElement('div');
+        div.className = 'pill';
+        const label = types ? types.join('+') : '';
+        div.textContent = `${label} → ${values.join(', ')} (Σ ${values.reduce((a, b) => a + (+b || 0), 0)})`;
+        historyEl.prepend(div);
+    }
+
+    document.getElementById('clear').addEventListener('click', () => Dice.clear());
+    document.getElementById('reroll').addEventListener('click', () => Dice.rerollLast());
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'r' || e.key === 'R') Dice.rerollLast();
+        if (e.key === 'c' || e.key === 'C') Dice.clear();
+    });
 
     // ===== On‑screen joystick logic (camera rotate) =====
-    const joyEl=document.getElementById('joystick');
-    const stickEl=joyEl.querySelector('.stick');
-    const JOY_R=55; // px radius of base
-    const JOY_SPEED=0.022; // radians per frame-scale
-    let joyActive=false, joyX=0, joyY=0;
+    const joyEl = document.getElementById('joystick');
+    const stickEl = joyEl.querySelector('.stick');
+    const JOY_R = 55; // px radius of base
+    const JOY_SPEED = 0.022; // radians per frame-scale
+    let joyActive = false, joyX = 0, joyY = 0;
 
-    function setStick(x,y){ // x,y in [-1,1]
-      joyX=clamp(x,-1,1); joyY=clamp(y,-1,1);
-      stickEl.style.transform=`translate(${joyX*JOY_R*0.6}px, ${joyY*JOY_R*0.6}px)`;
+    function setStick(x, y) { // x,y in [-1,1]
+        joyX = clamp(x, -1, 1);
+        joyY = clamp(y, -1, 1);
+        stickEl.style.transform = `translate(${joyX * JOY_R * 0.6}px, ${joyY * JOY_R * 0.6}px)`;
     }
 
     // Safe orbit helper: uses OrbitControls if rotate* exist, otherwise manual spherical math
-    function orbitBy(dAz, dPol){
-      const hasRotateFns = (typeof controls.rotateLeft === 'function') && (typeof controls.rotateUp === 'function');
-      if(hasRotateFns){ controls.rotateLeft(dAz); controls.rotateUp(dPol); return; }
-      // Manual fallback
-      const target = controls.target.clone();
-      const offset = new THREE.Vector3().subVectors(camera.position, target);
-      const sph = new THREE.Spherical(); sph.setFromVector3(offset);
-      sph.theta -= dAz; // azimuth
-      sph.phi   -= dPol; // polar
-      const minPhi = (typeof controls.minPolarAngle === 'number') ? controls.minPolarAngle : 0;
-      const maxPhi = (typeof controls.maxPolarAngle === 'number') ? controls.maxPolarAngle : Math.PI;
-      sph.phi = clamp(sph.phi, minPhi + 1e-3, maxPhi - 1e-3);
-      const minR = (typeof controls.minDistance === 'number') ? controls.minDistance : 0;
-      const maxR = (typeof controls.maxDistance === 'number') ? controls.maxDistance : Infinity;
-      sph.radius = clamp(sph.radius, minR, maxR);
-      offset.setFromSpherical(sph);
-      camera.position.copy(target).add(offset);
-      camera.lookAt(target);
+    function orbitBy(dAz, dPol) {
+        const hasRotateFns = (typeof controls.rotateLeft === 'function') && (typeof controls.rotateUp === 'function');
+        if (hasRotateFns) {
+            controls.rotateLeft(dAz);
+            controls.rotateUp(dPol);
+            return;
+        }
+        // Manual fallback
+        const target = controls.target.clone();
+        const offset = new THREE.Vector3().subVectors(camera.position, target);
+        const sph = new THREE.Spherical();
+        sph.setFromVector3(offset);
+        sph.theta -= dAz; // azimuth
+        sph.phi -= dPol; // polar
+        const minPhi = (typeof controls.minPolarAngle === 'number') ? controls.minPolarAngle : 0;
+        const maxPhi = (typeof controls.maxPolarAngle === 'number') ? controls.maxPolarAngle : Math.PI;
+        sph.phi = clamp(sph.phi, minPhi + 1e-3, maxPhi - 1e-3);
+        const minR = (typeof controls.minDistance === 'number') ? controls.minDistance : 0;
+        const maxR = (typeof controls.maxDistance === 'number') ? controls.maxDistance : Infinity;
+        sph.radius = clamp(sph.radius, minR, maxR);
+        offset.setFromSpherical(sph);
+        camera.position.copy(target).add(offset);
+        camera.lookAt(target);
     }
 
-    function joyRotate(dt){
-      if(!joyActive && Math.abs(joyX)<1e-3 && Math.abs(joyY)<1e-3) return;
-      const dAz = joyX * JOY_SPEED * (dt*60);
-      const dPol = joyY * JOY_SPEED * (dt*60);
-      orbitBy(dAz, dPol);
+    function joyRotate(dt) {
+        if (!joyActive && Math.abs(joyX) < 1e-3 && Math.abs(joyY) < 1e-3) return;
+        const dAz = joyX * JOY_SPEED * (dt * 60);
+        const dPol = joyY * JOY_SPEED * (dt * 60);
+        orbitBy(dAz, dPol);
     }
 
-    const joyRect=()=>joyEl.getBoundingClientRect();
-    function joyPoint(e){ const r=joyRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2; const x=(e.clientX-cx)/JOY_R, y=(e.clientY-cy)/JOY_R; const len=Math.hypot(x,y); return len>1?{x:x/len,y:y/len}:{x,y}; }
+    const joyRect = () => joyEl.getBoundingClientRect();
 
-    joyEl.addEventListener('pointerdown', (e)=>{ joyActive=true; joyEl.setPointerCapture(e.pointerId); const p=joyPoint(e); setStick(p.x,p.y); });
-    joyEl.addEventListener('pointermove', (e)=>{ if(!joyActive) return; const p=joyPoint(e); setStick(p.x,p.y); });
-    const joyEnd=()=>{ joyActive=false; setStick(0,0); };
-    joyEl.addEventListener('pointerup', joyEnd); joyEl.addEventListener('pointercancel', joyEnd); joyEl.addEventListener('lostpointercapture', joyEnd);
+    function joyPoint(e) {
+        const r = joyRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const x = (e.clientX - cx) / JOY_R, y = (e.clientY - cy) / JOY_R;
+        const len = Math.hypot(x, y);
+        return len > 1 ? {x: x / len, y: y / len} : {x, y};
+    }
+
+    joyEl.addEventListener('pointerdown', (e) => {
+        joyActive = true;
+        joyEl.setPointerCapture(e.pointerId);
+        const p = joyPoint(e);
+        setStick(p.x, p.y);
+    });
+    joyEl.addEventListener('pointermove', (e) => {
+        if (!joyActive) return;
+        const p = joyPoint(e);
+        setStick(p.x, p.y);
+    });
+    const joyEnd = () => {
+        joyActive = false;
+        setStick(0, 0);
+    };
+    joyEl.addEventListener('pointerup', joyEnd);
+    joyEl.addEventListener('pointercancel', joyEnd);
+    joyEl.addEventListener('lostpointercapture', joyEnd);
 
     // ===== Resize handling =====
-    function onResize(){ const w=stageEl.clientWidth, h=stageEl.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h,false); }
+    function onResize() {
+        const w = stageEl.clientWidth, h = stageEl.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h, false);
+    }
+
     new ResizeObserver(onResize).observe(stageEl);
 
     // ===== Main loop =====
-    let lastT=performance.now();
-    function animate(){
-      requestAnimationFrame(animate);
-      const now=performance.now(); let dt=(now-lastT)/1000; lastT=now; dt=Math.min(0.033, dt);
-      const step=prefersReduced?1/50:1/60; world.step(step, dt, 3);
-      Dice.list.forEach(d=>{ d.updateFromPhysics(); d.checkRest(); });
+    let lastT = performance.now();
 
-      if(Dice.currentRoll && Dice.currentRoll.id!==Dice.reportedRollId){
-        const summary=computeRollSummary(Dice.currentRoll);
-        if(summary){ updateLastUI(summary.values, summary.labels); pushHistory(summary.values, summary.labels); Dice.reportedRollId=Dice.currentRoll.id; }
-      }
+    function animate() {
+        requestAnimationFrame(animate);
+        const now = performance.now();
+        let dt = (now - lastT) / 1000;
+        lastT = now;
+        dt = Math.min(0.033, dt);
+        const step = prefersReduced ? 1 / 50 : 1 / 60;
+        world.step(step, dt, 3);
+        Dice.list.forEach(d => {
+            d.updateFromPhysics();
+            d.checkRest();
+        });
 
-      joyRotate(dt); controls.update(); CameraShake.update(); renderer.render(scene, camera);
+        if (Dice.currentRoll && Dice.currentRoll.id !== Dice.reportedRollId) {
+            const summary = computeRollSummary(Dice.currentRoll);
+            if (summary) {
+                updateLastUI(summary.values, summary.labels);
+                pushHistory(summary.values, summary.labels);
+                Dice.reportedRollId = Dice.currentRoll.id;
+            }
+        }
+
+        joyRotate(dt);
+        controls.update();
+        CameraShake.update();
+        renderer.render(scene, camera);
     }
+
     animate();
 
     // ===== Self-tests (expanded) =====
-    function verifyOutward(geometry){ const g=geometry.toNonIndexed(); const pos=g.attributes.position.array; let cx=0,cy=0,cz=0,count=0; for(let i=0;i<pos.length;i+=3){cx+=pos[i];cy+=pos[i+1];cz+=pos[i+2];count++;} cx/=count; cy/=count; cz/=count; for(let i=0;i<pos.length;i+=9){ const ax=pos[i], ay=pos[i+1], az=pos[i+2]; const bx=pos[i+3], by=pos[i+4], bz=pos[i+5]; const cx1=pos[i+6], cy1=pos[i+7], cz1=pos[i+8]; const abx=bx-ax, aby=by-ay, abz=bz-az; const acx=cx1-ax, acy=cy1-ay, acz=cz1-az; const nx=aby*acz - abz*acy; const ny=abz*acx - abx*acz; const nz=abx*acy - aby*acx; const fcx=(ax+bx+cx1)/3, fcy=(ay+by+cy1)/3, fcz=(az+bz+cz1)/3; const ox=fcx-cx, oy=fcy-cy, oz=fcz-cz; if(nx*ox + ny*oy + nz*oz < -1e-7) return false; } return true; }
-    function runSelfTests(){
-      const results=[]; const ok=(name)=>results.push({test:name, pass:true}); const bad=(name,e)=>results.push({test:name, pass:false, err:e?.message||String(e)});
-      try{ if(!(THREE && THREE.WebGLRenderer)) throw new Error('THREE missing'); ok('three import'); }catch(e){ bad('three import',e); }
-      try{ if(!OrbitControls) throw new Error('OrbitControls missing'); ok('orbitcontrols import'); }catch(e){ bad('orbitcontrols import',e); }
-      try{
-        const types=['d4','d6','d8','d12','d20'];
-        for(const t of types){ const d=new Die(t,{position:new THREE.Vector3(99,99,99)}); if(d.faceInfos.length!==d._numbers().length) throw new Error(`${t}: faces ${d.faceInfos.length} != numbers ${d._numbers().length}`); if(!verifyOutward(d.mesh.geometry)) throw new Error(`${t}: inward triangle winding detected`); d.dispose(); }
-        ok('face mapping & outward winding (polyhedra)');
-      }catch(e){ bad('face mapping & outward winding (polyhedra)',e); }
-      try{
-        const d=new Die('d10',{position:new THREE.Vector3(99,99,99)}); if(d.faceInfos.length!==10) throw new Error('d10 faces != 10'); d.dispose();
-        const dt=new Die('d10T',{position:new THREE.Vector3(99,99,99)}); if(dt.faceInfos.length!==10) throw new Error('d10T faces != 10'); dt.dispose();
-        const du=new Die('d10U',{position:new THREE.Vector3(99,99,99)}); if(du.faceInfos.length!==10) throw new Error('d10U faces != 10'); du.dispose();
-        ok('d10 family face count = 10');
-      }catch(e){ bad('d10 family face count = 10', e); }
-      try{ const d10=createD10(0.95); const s=cannonConvexFromGeometry(d10.geometry); if(!s || !(s.faces && s.faces.length)) throw new Error('convex build failed'); ok('convex build (d10)'); }catch(e){ bad('convex build (d10)', e); }
-      try{ const roll={id:'t', items:[{type:'d10T', rested:true, value:0},{type:'d10U', rested:true, value:0}], groups:[{kind:'percentile', tens:'d10T', units:'d10U'}]}; const s1=computeRollSummary(roll); if(!s1 || s1.values[0]!==100) throw new Error('00+0 should be 100'); roll.items=[{type:'d10T', rested:true, value:50},{type:'d10U', rested:true, value:7}]; const s2=computeRollSummary(roll); if(s2.values[0]!==57) throw new Error('50+7 should be 57'); ok('percentile combination'); }catch(e){ bad('percentile combination', e); }
-      try{ if(walls.length!==4) throw new Error('walls not created: '+walls.length); ok('smaller field walls present'); }catch(e){ bad('smaller field walls present', e); }
-      // New tests
-      try{ if(typeof ensureOutwardTriangles !== 'function') throw new Error('ensureOutwardTriangles missing'); ok('ensureOutwardTriangles exists'); }catch(e){ bad('ensureOutwardTriangles exists', e); }
-      try{
-        const d12=new Die('d12',{position:new THREE.Vector3(99,99,99)});
-        const keys=new Set(d12.faceInfos.map(f=>`${f.center.x.toFixed(2)}_${f.center.y.toFixed(2)}_${f.center.z.toFixed(2)}`));
-        if(keys.size!==12) throw new Error('d12 centers not unique: got '+keys.size);
-        d12.dispose();
-        ok('d12 unique face centers');
-      }catch(e){ bad('d12 unique face centers', e); }
-      try{
-        const before=new THREE.Vector3().copy(camera.position);
-        orbitBy(0.1, 0.1);
-        const after=new THREE.Vector3().copy(camera.position);
-        if(before.distanceTo(after) < 1e-6 && typeof controls.rotateLeft !== 'function') throw new Error('orbitBy fallback did not move camera');
-        ok('orbitBy fallback / rotateLeft polyfill');
-      }catch(e){ bad('orbitBy fallback / rotateLeft polyfill', e); }
-      console.table(results);
-      const pill=document.createElement('div'); pill.className='pill'; pill.textContent=results.every(r=>r.pass)?'Diagnostics: OK':'Diagnostics: Issues (see console)'; historyEl.prepend(pill);
+    function verifyOutward(geometry) {
+        const g = geometry.toNonIndexed();
+        const pos = g.attributes.position.array;
+        let cx = 0, cy = 0, cz = 0, count = 0;
+        for (let i = 0; i < pos.length; i += 3) {
+            cx += pos[i];
+            cy += pos[i + 1];
+            cz += pos[i + 2];
+            count++;
+        }
+        cx /= count;
+        cy /= count;
+        cz /= count;
+        for (let i = 0; i < pos.length; i += 9) {
+            const ax = pos[i], ay = pos[i + 1], az = pos[i + 2];
+            const bx = pos[i + 3], by = pos[i + 4], bz = pos[i + 5];
+            const cx1 = pos[i + 6], cy1 = pos[i + 7], cz1 = pos[i + 8];
+            const abx = bx - ax, aby = by - ay, abz = bz - az;
+            const acx = cx1 - ax, acy = cy1 - ay, acz = cz1 - az;
+            const nx = aby * acz - abz * acy;
+            const ny = abz * acx - abx * acz;
+            const nz = abx * acy - aby * acx;
+            const fcx = (ax + bx + cx1) / 3, fcy = (ay + by + cy1) / 3, fcz = (az + bz + cz1) / 3;
+            const ox = fcx - cx, oy = fcy - cy, oz = fcz - cz;
+            if (nx * ox + ny * oy + nz * oz < -1e-7) return false;
+        }
+        return true;
     }
 
-    onResize(); runSelfTests();
-  </script>
+    function runSelfTests() {
+        const results = [];
+        const ok = (name) => results.push({test: name, pass: true});
+        const bad = (name, e) => results.push({test: name, pass: false, err: e?.message || String(e)});
+        try {
+            if (!(THREE && THREE.WebGLRenderer)) throw new Error('THREE missing');
+            ok('three import');
+        } catch (e) {
+            bad('three import', e);
+        }
+        try {
+            if (!OrbitControls) throw new Error('OrbitControls missing');
+            ok('orbitcontrols import');
+        } catch (e) {
+            bad('orbitcontrols import', e);
+        }
+        try {
+            const types = ['d4', 'd6', 'd8', 'd12', 'd20'];
+            for (const t of types) {
+                const d = new Die(t, {position: new THREE.Vector3(99, 99, 99)});
+                if (d.faceInfos.length !== d._numbers().length) throw new Error(`${t}: faces ${d.faceInfos.length} != numbers ${d._numbers().length}`);
+                if (!verifyOutward(d.mesh.geometry)) throw new Error(`${t}: inward triangle winding detected`);
+                d.dispose();
+            }
+            ok('face mapping & outward winding (polyhedra)');
+        } catch (e) {
+            bad('face mapping & outward winding (polyhedra)', e);
+        }
+        try {
+            const d = new Die('d10', {position: new THREE.Vector3(99, 99, 99)});
+            if (d.faceInfos.length !== 10) throw new Error('d10 faces != 10');
+            d.dispose();
+            const dt = new Die('d10T', {position: new THREE.Vector3(99, 99, 99)});
+            if (dt.faceInfos.length !== 10) throw new Error('d10T faces != 10');
+            dt.dispose();
+            const du = new Die('d10U', {position: new THREE.Vector3(99, 99, 99)});
+            if (du.faceInfos.length !== 10) throw new Error('d10U faces != 10');
+            du.dispose();
+            ok('d10 family face count = 10');
+        } catch (e) {
+            bad('d10 family face count = 10', e);
+        }
+        try {
+            const d10 = createD10(0.95);
+            const s = cannonConvexFromGeometry(d10.geometry);
+            if (!s || !(s.faces && s.faces.length)) throw new Error('convex build failed');
+            ok('convex build (d10)');
+        } catch (e) {
+            bad('convex build (d10)', e);
+        }
+        try {
+            const roll = {
+                id: 't',
+                items: [{type: 'd10T', rested: true, value: 0}, {type: 'd10U', rested: true, value: 0}],
+                groups: [{kind: 'percentile', tens: 'd10T', units: 'd10U'}]
+            };
+            const s1 = computeRollSummary(roll);
+            if (!s1 || s1.values[0] !== 100) throw new Error('00+0 should be 100');
+            roll.items = [{type: 'd10T', rested: true, value: 50}, {type: 'd10U', rested: true, value: 7}];
+            const s2 = computeRollSummary(roll);
+            if (s2.values[0] !== 57) throw new Error('50+7 should be 57');
+            ok('percentile combination');
+        } catch (e) {
+            bad('percentile combination', e);
+        }
+        try {
+            if (walls.length !== 4) throw new Error('walls not created: ' + walls.length);
+            ok('smaller field walls present');
+        } catch (e) {
+            bad('smaller field walls present', e);
+        }
+        // New tests
+        try {
+            if (typeof ensureOutwardTriangles !== 'function') throw new Error('ensureOutwardTriangles missing');
+            ok('ensureOutwardTriangles exists');
+        } catch (e) {
+            bad('ensureOutwardTriangles exists', e);
+        }
+        try {
+            const d12 = new Die('d12', {position: new THREE.Vector3(99, 99, 99)});
+            const keys = new Set(d12.faceInfos.map(f => `${f.center.x.toFixed(2)}_${f.center.y.toFixed(2)}_${f.center.z.toFixed(2)}`));
+            if (keys.size !== 12) throw new Error('d12 centers not unique: got ' + keys.size);
+            d12.dispose();
+            ok('d12 unique face centers');
+        } catch (e) {
+            bad('d12 unique face centers', e);
+        }
+        try {
+            const before = new THREE.Vector3().copy(camera.position);
+            orbitBy(0.1, 0.1);
+            const after = new THREE.Vector3().copy(camera.position);
+            if (before.distanceTo(after) < 1e-6 && typeof controls.rotateLeft !== 'function') throw new Error('orbitBy fallback did not move camera');
+            ok('orbitBy fallback / rotateLeft polyfill');
+        } catch (e) {
+            bad('orbitBy fallback / rotateLeft polyfill', e);
+        }
+        console.table(results);
+        const pill = document.createElement('div');
+        pill.className = 'pill';
+        pill.textContent = results.every(r => r.pass) ? 'Diagnostics: OK' : 'Diagnostics: Issues (see console)';
+        historyEl.prepend(pill);
+    }
+
+    onResize();
+    runSelfTests();
+</script>
 </body>
 </html>
+
