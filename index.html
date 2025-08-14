@@ -316,7 +316,6 @@
     <main>
         <div id="stage" role="application" aria-label="3D dice stage"></div>
         <div class="ui">
-            <button class="btn" id="reroll" title="R to reroll last">Reroll last</button>
             <button class="btn" id="clear" title="C to clear">Clear</button>
             <button class="btn" id="toggle-shake" title="Toggle camera shake" aria-pressed="false">Shake: On</button>
             <button class="btn" id="toggle-history" aria-controls="history-panel" aria-expanded="false">
@@ -1018,11 +1017,7 @@
         CameraShake.reset();
         Dice.currentRoll = null;
     };
-    Dice.rerollLast = (origin = null, impulse = null) => {
-        if (!Dice.lastSpec.length) return;
-        Dice.clear();
-        spawnDiceBundle(Dice.lastSpec, origin, impulse);
-    };
+
 
     // ===== Simple tap/click to roll (better mobile) =====
     const labelsEl = document.getElementById('labels');
@@ -1154,9 +1149,7 @@
     }
 
     document.getElementById('clear').addEventListener('click', () => Dice.clear());
-    document.getElementById('reroll').addEventListener('click', () => Dice.rerollLast());
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'r' || e.key === 'R') Dice.rerollLast();
         if (e.key === 'c' || e.key === 'C') Dice.clear();
     });
 
