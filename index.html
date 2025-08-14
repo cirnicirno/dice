@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DnD Dice Roller — 3D Physics (Three.js + cannon‑es)</title>
+  <style>
+    :root{
+      --bg:#0b0d10; --panel:#12151c; --ink:#e9eef7; --muted:#8a93a3; --accent:#6ee7ff; --accent2:#b794f4;
+      --good:#9ae6b4; --warn:#f6ad55; --bad:#fc8181; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 60% -10%, #17202a, #0b0d10 55%);
+      color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,"Noto Sans",sans-serif}
+
+    .app{display:grid;grid-template-rows:auto 1fr auto;min-height:100dvh}
+
+    header{position:relative;z-index:2;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+      border-bottom:1px solid rgba(255,255,255,.06);padding:.75rem 1rem}
+    .bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+    .title{font-weight:700;letter-spacing:.2px;margin-right:.5rem}
+
+    .labels{display:flex;gap:.5rem;flex-wrap:wrap}
+    .die-label{user-select:none; position:relative; display:inline-flex; align-items:center; justify-content:center;
+      height:36px; padding:0 .8rem; border-radius:9999px; background:var(--panel); border:1px solid rgba(255,255,255,.08);
+      box-shadow:var(--shadow); cursor:grab; transition:.2s transform,.2s background,.2s border-color;
+      outline:none; color:var(--ink)}
+    .die-label:active{cursor:grabbing; transform:scale(.97)}
+    .die-label[data-type="d4"]{--c:#60a5fa}
+    .die-label[data-type="d6"]{--c:#4ade80}
+    .die-label[data-type="d8"]{--c:#f472b6}
+    .die-label[data-type="d10"]{--c:#f59e0b}
+    .die-label[data-type="d12"]{--c:#22d3ee}
+    .die-label[data-type="d20"]{--c:#a78bfa}
+    .die-label[data-type="d100"]{--c:#fb7185}
+    .die-label::before{content:""; width:10px;height:10px;border-radius:50%;margin-right:.5rem;background:var(--c)}
+    .die-label:is(:hover,:focus-visible){border-color:var(--c); box-shadow:0 8px 30px color-mix(in oklab, var(--c) 25%, #0000)}
+
+    .dragging .die-label{pointer-events:none}
+    .bundle-count{position:absolute;top:-8px;right:-8px;background:var(--c);color:#0a0a0a;font-size:12px;font-weight:700;
+      padding:.1rem .35rem;border-radius:9999px;border:2px solid #0a0a0a}
+
+    main{position:relative}
+    #stage{position:absolute; inset:0}
+    #overlay{position:absolute; inset:0; pointer-events:none}
+
+    .ui{position:absolute; left:1rem; bottom:1rem; display:flex; gap:.5rem; z-index:3; flex-wrap:wrap}
+    .btn{appearance:none; border:none; background:var(--panel); color:var(--ink); padding:.6rem .9rem; border-radius:12px;
+      border:1px solid rgba(255,255,255,.08); box-shadow:var(--shadow); cursor:pointer; font-weight:700}
+    .btn:hover{border-color:var(--accent)}
+
+    aside{z-index:2; background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+      border-top:1px solid rgba(255,255,255,.06); padding:.6rem 1rem; display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap}
+    .results{min-width:250px}
+    .results h3{margin:.2rem 0 .4rem;font-size:14px;color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .5rem;background:#131722;border-radius:999px;
+      border:1px solid rgba(255,255,255,.08); font-size:13px}
+    .pill .sum{font-weight:800}
+    .history{display:flex; gap:.35rem; flex-wrap:wrap}
+
+    @media (max-width:720px){
+      .title{display:none}
+      .results{min-width:auto}
+    }
+
+    /* Reduced motion mode */
+    @media (prefers-reduced-motion: reduce){
+      .die-label,.btn{transition:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="bar" role="toolbar" aria-label="Dice bar">
+        <div class="title">DnD Dice Roller</div>
+        <div class="labels" id="labels">
+          <button class="die-label" data-type="d4" aria-label="Drag to roll a D4" title="Drag to roll a D4">d4</button>
+          <button class="die-label" data-type="d6" aria-label="Drag to roll a D6" title="Drag to roll a D6">d6</button>
+          <button class="die-label" data-type="d8" aria-label="Drag to roll a D8" title="Drag to roll a D8">d8</button>
+          <button class="die-label" data-type="d10" aria-label="Drag to roll a D10" title="Drag to roll a D10">d10</button>
+          <button class="die-label" data-type="d12" aria-label="Drag to roll a D12" title="Drag to roll a D12">d12</button>
+          <button class="die-label" data-type="d20" aria-label="Drag to roll a D20" title="Drag to roll a D20">d20</button>
+          <button class="die-label" data-type="d100" aria-label="Drag to roll percentile (d100)" title="Drag to roll percentile (d100)">d100</button>
+        </div>
+      </div>
+    </header>
+    <main>
+      <div id="stage" role="application" aria-label="3D dice stage"></div>
+      <canvas id="overlay" aria-hidden="true"></canvas>
+      <div class="ui">
+        <button class="btn" id="reroll" title="R to reroll last">Reroll last</button>
+        <button class="btn" id="clear" title="C to clear">Clear</button>
+      </div>
+    </main>
+    <aside>
+      <div class="results" aria-live="polite">
+        <h3>Last roll</h3>
+        <div id="last" class="pill"><span>—</span></div>
+        <div class="pill"><span>Sum</span> <span class="sum" id="sum">—</span></div>
+      </div>
+      <div>
+        <h3>History</h3>
+        <div id="history" class="history" aria-label="Results history"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Three.js, OrbitControls and cannon-es via ESM CDN (no importmap needed) -->
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three@0.160.1';
+    import { OrbitControls } from 'https://esm.sh/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+    import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+    // ===== Utilities =====
+    const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+    const rand=(a,b)=>a+Math.random()*(b-a);
+    const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // 2D overlay for trajectory hint
+    const overlay = document.getElementById('overlay');
+    const octx = overlay.getContext('2d');
+    function resizeOverlay(){ overlay.width=overlay.clientWidth; overlay.height=overlay.clientHeight; }
+    new ResizeObserver(resizeOverlay).observe(overlay);
+
+    // ===== Audio (soft roll clicks via WebAudio, no external files) =====
+    const AudioSys = (()=>{
+      let ctx=null;
+      const ensure=()=>{ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch{} } return ctx };
+      const click=(gain=0.06, freq=220)=>{
+        const ac=ensure(); if(!ac) return; const o=ac.createOscillator(); const g=ac.createGain();
+        o.frequency.value=freq*rand(.9,1.3); o.type='triangle'; g.gain.value=gain; o.connect(g).connect(ac.destination);
+        const t=ac.currentTime; g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
+        o.start(t); o.stop(t+0.09);
+      };
+      return {click, resume:()=>ctx&&ctx.resume?.()};
+    })();
+
+    // ===== Scene setup =====
+    const stageEl=document.getElementById('stage');
+    const scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x0b0d10);
+
+    const camera=new THREE.PerspectiveCamera(55, stageEl.clientWidth/stageEl.clientHeight, 0.1, 200);
+    camera.position.set(7, 9.5, 11.5);
+    const cameraRig=new THREE.Group(); cameraRig.add(camera); scene.add(cameraRig);
+
+    const renderer=new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setSize(stageEl.clientWidth, stageEl.clientHeight);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+    renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    stageEl.appendChild(renderer.domElement);
+
+    // Controls (disabled pan/zoom for simplicity; orbit for lookaround)
+    const controls=new OrbitControls(camera, renderer.domElement);
+    controls.enablePan=false; controls.enableZoom=false; controls.target.set(0,0.8,0);
+
+    // Lights
+    const hemi=new THREE.HemisphereLight(0xeaf2ff,0x0a0a0a, 0.75); scene.add(hemi);
+    const dir=new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(10,14,6); dir.castShadow=true;
+    dir.shadow.mapSize.set(2048,2048); dir.shadow.camera.left=-20; dir.shadow.camera.right=20; dir.shadow.camera.top=20; dir.shadow.camera.bottom=-20; dir.shadow.camera.far=60; scene.add(dir);
+
+    // Ground with subtle texture
+    const groundGeo=new THREE.PlaneGeometry(60,36,1,1);
+    const groundTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=256; const ctx=c.getContext('2d');
+      ctx.fillStyle='#0f141b'; ctx.fillRect(0,0,256,256);
+      ctx.globalAlpha=.06; ctx.fillStyle='#fff';
+      for(let i=0;i<120;i++){ const x=rand(0,256), y=rand(0,256), r=rand(1,2.2); ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+      const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(12,8); t.anisotropy=16; return t; })();
+    const groundMat=new THREE.MeshStandardMaterial({color:0x11161f, map:groundTex, roughness:0.95, metalness:0.0});
+    const ground=new THREE.Mesh(groundGeo, groundMat); ground.receiveShadow=true; ground.rotation.x=-Math.PI/2; scene.add(ground);
+
+    // ==== Physics world =====
+    const world=new CANNON.World({gravity:new CANNON.Vec3(0, -9.82, 0)});
+    world.broadphase=new CANNON.SAPBroadphase(world);
+    world.allowSleep=true;
+    const groundBody=new CANNON.Body({type:CANNON.Body.STATIC, shape:new CANNON.Plane(), material:new CANNON.Material('ground')});
+    groundBody.quaternion.setFromEuler(-Math.PI/2,0,0); world.addBody(groundBody);
+    const defaultMat=new CANNON.Material('dice');
+    const contact=new CANNON.ContactMaterial(defaultMat, groundBody.material, {friction:0.25, restitution:0.35});
+    world.addContactMaterial(contact);
+
+    // ===== Helpers to ensure outward triangle winding (right-hand rule) =====
+    function ensureOutwardTriangles(geometry){
+      const g=geometry.toNonIndexed();
+      const pos=new Float32Array(g.attributes.position.array);
+      let cx=0,cy=0,cz=0,count=0;
+      for(let i=0;i<pos.length;i+=3){ cx+=pos[i]; cy+=pos[i+1]; cz+=pos[i+2]; count++; }
+      cx/=count; cy/=count; cz/=count;
+      for(let i=0;i<pos.length;i+=9){
+        const ax=pos[i], ay=pos[i+1], az=pos[i+2];
+        const bx=pos[i+3], by=pos[i+4], bz=pos[i+5];
+        const cx1=pos[i+6], cy1=pos[i+7], cz1=pos[i+8];
+        const abx=bx-ax, aby=by-ay, abz=bz-az;
+        const acx=cx1-ax, acy=cy1-ay, acz=cz1-az;
+        const nx=aby*acz - abz*acy;
+        const ny=abz*acx - abx*acz;
+        const nz=abx*acy - aby*acx;
+        const fcx=(ax+bx+cx1)/3, fcy=(ay+by+cy1)/3, fcz=(az+bz+cz1)/3;
+        const ox=fcx-cx, oy=fcy-cy, oz=fcz-cz;
+        const dot=nx*ox + ny*oy + nz*oz;
+        if(dot<0){
+          const tbx=pos[i+3], tby=pos[i+4], tbz=pos[i+5];
+          pos[i+3]=pos[i+6]; pos[i+4]=pos[i+7]; pos[i+5]=pos[i+8];
+          pos[i+6]=tbx; pos[i+7]=tby; pos[i+8]=tbz;
+        }
+      }
+      const out=new THREE.BufferGeometry();
+      out.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+      out.computeVertexNormals();
+      return out;
+    }
+
+    // ===== Face grouping from geometry (triangles -> polygon faces) =====
+    function groupPolygonFaces(geometry){
+      const g=geometry.toNonIndexed();
+      const pos=g.attributes.position.array; const groups={};
+      for(let i=0;i<pos.length;i+=9){
+        const a=new THREE.Vector3(pos[i],pos[i+1],pos[i+2]);
+        const b=new THREE.Vector3(pos[i+3],pos[i+4],pos[i+5]);
+        const c=new THREE.Vector3(pos[i+6],pos[i+7],pos[i+8]);
+        const n=new THREE.Vector3().subVectors(b,a).cross(new THREE.Vector3().subVectors(c,a)).normalize();
+        const key=`${n.x.toFixed(3)}_${n.y.toFixed(3)}_${n.z.toFixed(3)}`; // finer quantization to avoid merging distinct faces
+        const cent=new THREE.Vector3().addVectors(a,b).add(c).multiplyScalar(1/3);
+        if(!groups[key]) groups[key]={tris:[], normal:new THREE.Vector3(), center:new THREE.Vector3()};
+        groups[key].tris.push([a,b,c]);
+        groups[key].normal.add(n);
+        groups[key].center.add(cent);
+      }
+      const faces=[]; Object.values(groups).forEach(g=>{ g.normal.normalize(); g.center.multiplyScalar(1/g.tris.length); faces.push(g); });
+      return faces; // [{tris:[[a,b,c],...], normal, center}]
+    }
+
+    // Build CANNON.ConvexPolyhedron from THREE geometry with guaranteed outward face normals
+    function cannonConvexFromGeometry(geometry){
+      const g=geometry.toNonIndexed();
+      const pos=g.attributes.position.array;
+      const verts=[]; const vmap=new Map();
+      const add=(x,y,z)=>{ const k=`${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`; let idx=vmap.get(k); if(idx==null){ idx=verts.length; vmap.set(k, idx); verts.push(new CANNON.Vec3(x,y,z)); } return idx; };
+      let sumx=0,sumy=0,sumz=0,count=0;
+      for(let i=0;i<pos.length;i+=9){ sumx+=pos[i]+pos[i+3]+pos[i+6]; sumy+=pos[i+1]+pos[i+4]+pos[i+7]; sumz+=pos[i+2]+pos[i+5]+pos[i+8]; count+=3; }
+      const cx=sumx/count, cy=sumy/count, cz=sumz/count;
+      const faces=[];
+      for(let i=0;i<pos.length;i+=9){
+        const ax=pos[i], ay=pos[i+1], az=pos[i+2];
+        const bx=pos[i+3], by=pos[i+4], bz=pos[i+5];
+        const cx1=pos[i+6], cy1=pos[i+7], cz1=pos[i+8];
+        const ia=add(ax,ay,az), ib=add(bx,by,bz), ic=add(cx1,cy1,cz1);
+        const abx=bx-ax, aby=by-ay, abz=bz-az;
+        const acx=cx1-ax, acy=cy1-ay, acz=cz1-az;
+        const nx=aby*acz - abz*acy, ny=abz*acx - abx*acz, nz=abx*acy - aby*acx;
+        const fcx=(ax+bx+cx1)/3, fcy=(ay+by+cy1)/3, fcz=(az+bz+cz1)/3;
+        const ox=fcx-cx, oy=fcy-cy, oz=fcz-cz; const dot=nx*ox + ny*oy + nz*oz;
+        faces.push(dot>=0 ? [ia,ib,ic] : [ia,ic,ib]);
+      }
+      return new CANNON.ConvexPolyhedron({vertices:verts, faces});
+    }
+
+    // ===== Precise D10 (pentagonal trapezohedron) with explicit 10 faces =====
+    function createD10(radius=0.95){
+      const a=radius*1.06;      // apex distance
+      const ringY=radius*0.19;  // ring offset up/down
+      const r=radius*0.78;      // ring radius
+      const V=[];
+      V.push(new THREE.Vector3(0, a, 0)); // 0 top apex
+      V.push(new THREE.Vector3(0,-a, 0)); // 1 bottom apex
+      for(let i=0;i<5;i++){ const ang=i*2*Math.PI/5; V.push(new THREE.Vector3(Math.cos(ang)*r,  ringY, Math.sin(ang)*r)); } // 2..6 upper ring
+      for(let i=0;i<5;i++){ const ang=i*2*Math.PI/5 + Math.PI/5; V.push(new THREE.Vector3(Math.cos(ang)*r,-ringY, Math.sin(ang)*r)); } // 7..11 lower ring
+      const tris=[]; // build 20 triangles
+      for(let i=0;i<5;i++){ const ui=2+i, ui1=2+((i+1)%5), li=7+i; tris.push([0,ui,li],[0,li,ui1]); }
+      for(let i=0;i<5;i++){ const li=7+i, li1=7+((i+1)%5), ui=2+((i+1)%5); tris.push([1,li,ui],[1,ui,li1]); }
+      const pos=[]; for(const t of tris){ const [a,b,c]=t, A=V[a],B=V[b],C=V[c]; pos.push(A.x,A.y,A.z,B.x,B.y,B.z,C.x,C.y,C.z); }
+      let geom=new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos),3));
+      geom.computeVertexNormals(); geom=ensureOutwardTriangles(geom);
+      // explicit 10 faces (kites) with center & normal
+      const faces=[];
+      for(let i=0;i<5;i++){
+        const ui=2+i, ui1=2+((i+1)%5), li=7+i; // top kite verts: 0, ui, li, ui1
+        const verts=[0,ui,li,ui1].map(ix=>V[ix]);
+        const center=new THREE.Vector3(); verts.forEach(v=>center.add(v)); center.multiplyScalar(1/verts.length);
+        const normal=center.clone().normalize(); faces.push({normal, center});
+      }
+      for(let i=0;i<5;i++){
+        const li=7+i, li1=7+((i+1)%5), ui=2+((i+1)%5); // bottom kite verts: 1, li, ui, li1
+        const verts=[1,li,ui,li1].map(ix=>V[ix]);
+        const center=new THREE.Vector3(); verts.forEach(v=>center.add(v)); center.multiplyScalar(1/verts.length);
+        const normal=center.clone().normalize(); faces.push({normal, center});
+      }
+      return {geometry:geom, faces};
+    }
+
+    // ===== Canvas number texture =====
+    function makeFaceTexture(text, color='#f0f3f9'){
+      const size=256; const c=document.createElement('canvas'); c.width=c.height=size; const ctx=c.getContext('2d');
+      ctx.fillStyle='rgba(0,0,0,0)'; ctx.fillRect(0,0,size,size);
+      ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=10; ctx.beginPath(); ctx.arc(size/2,size/2,size*0.42,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle=color; ctx.font='bold 150px system-ui,Segoe UI,Roboto,Inter,Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(text,size/2,size/2+6);
+      const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; return tex;
+    }
+
+    function makeBubbleTexture(text){
+      const c=document.createElement('canvas'); c.width=c.height=192; const x=c.getContext('2d');
+      x.shadowColor='rgba(0,0,0,.6)'; x.shadowBlur=20; x.fillStyle='rgba(20,24,32,.96)';
+      x.beginPath(); x.arc(96,96,72,0,Math.PI*2); x.fill();
+      x.fillStyle='#e9eef7'; x.font='bold 86px system-ui,Segoe UI,Roboto'; x.textAlign='center'; x.textBaseline='middle';
+      x.fillText(text,96,103);
+      const t=new THREE.CanvasTexture(c); t.anisotropy=8; t.needsUpdate=true; return t;
+    }
+
+    // ===== Die factory =====
+    const DIE_COLORS={
+      d4:0x60a5fa, d6:0x4ade80, d8:0xf472b6, d10:0xf59e0b, d12:0x22d3ee, d20:0xa78bfa, d100:0xfb7185,
+      d10T:0xfb7185, // tens die (percentile) — pinkish
+      d10U:0x22d3ee  // units die — cyan
+    };
+
+    class Die {
+      constructor(type, {position=new THREE.Vector3(), scale=1}={}){
+        this.type=type; this.scale=scale; this.group=new THREE.Group(); this.group.position.copy(position);
+        this.value=null; this.asleepFrames=0; this.faceInfos=[]; this.rested=false; this.resultSprite=null; this.sizeY=1;
+        this._build();
+      }
+      _baseGeometry(){
+        const s=this.scale;
+        switch(this.type){
+          case 'd4': return new THREE.TetrahedronGeometry(0.8*s);
+          case 'd6': return new THREE.BoxGeometry(1.2*s,1.2*s,1.2*s);
+          case 'd8': return new THREE.OctahedronGeometry(0.95*s);
+          case 'd12': return new THREE.DodecahedronGeometry(0.95*s);
+          case 'd20': return new THREE.IcosahedronGeometry(1.05*s);
+          case 'd10': case 'd10T': case 'd10U': return null; // handled specially
+          default: return new THREE.BoxGeometry(1*s,1*s,1*s);
+        }
+      }
+      _numbers(){
+        switch(this.type){
+          case 'd4': return Array.from({length:4},(_,i)=>i+1);
+          case 'd6': return Array.from({length:6},(_,i)=>i+1);
+          case 'd8': return Array.from({length:8},(_,i)=>i+1);
+          case 'd10': return Array.from({length:10},(_,i)=>i+1); // 1..10
+          case 'd10T': return Array.from({length:10},(_,i)=>i*10); // 0..90 (00,10,...,90)
+          case 'd10U': return Array.from({length:10},(_,i)=>i);    // 0..9
+          case 'd12': return Array.from({length:12},(_,i)=>i+1);
+          case 'd20': return Array.from({length:20},(_,i)=>i+1);
+        }
+      }
+      _build(){
+        const color=DIE_COLORS[this.type]||0xffffff;
+        let geo, faceList;
+        if(this.type==='d10' || this.type==='d10T' || this.type==='d10U'){
+          const d10=createD10(0.95*this.scale); geo=d10.geometry; faceList=d10.faces; // exactly 10 faces
+        } else {
+          geo=ensureOutwardTriangles(this._baseGeometry()); faceList=groupPolygonFaces(geo);
+        }
+        const mat=new THREE.MeshStandardMaterial({color, roughness:0.45, metalness:0.15});
+        const mesh=new THREE.Mesh(geo, mat); mesh.castShadow=true; mesh.receiveShadow=false; this.mesh=mesh; this.group.add(mesh);
+
+        geo.computeBoundingBox?.(); if(geo.boundingBox){ this.sizeY = geo.boundingBox.max.y - geo.boundingBox.min.y; }
+
+        // prepare numbers -> faces (stable order around yaw for non-d10; d10 already equally spaced)
+        let faces=faceList;
+        if(!(this.type==='d10'||this.type==='d10T'||this.type==='d10U')){
+          faces=faceList.slice().sort((A,B)=>{ const ay=Math.atan2(A.normal.z, A.normal.x); const by=Math.atan2(B.normal.z, B.normal.x); return ay-by; });
+        }
+        const nums=this._numbers();
+        faces.forEach((f,i)=>{
+          const val=nums[i % nums.length];
+          const size=this.type==='d20'?0.5: this.type==='d12'?0.6: (this.type==='d10'||this.type==='d10T'||this.type==='d10U')?0.62: this.type==='d8'?0.55: this.type==='d4'?0.45: 0.7;
+          const label = (this.type==='d10T' ? (val===0?'00':String(val)) : String(val));
+          const plane=new THREE.Mesh(new THREE.PlaneGeometry(size,size), new THREE.MeshBasicMaterial({map:makeFaceTexture(label), transparent:true}));
+          const q=new THREE.Quaternion(); q.setFromUnitVectors(new THREE.Vector3(0,0,1), f.normal);
+          plane.quaternion.copy(q);
+          const center=f.center.clone().add(f.normal.clone().multiplyScalar(0.02));
+          plane.position.copy(center);
+          plane.renderOrder=1; this.group.add(plane);
+          this.faceInfos.push({value:val, normal:f.normal.clone(), center:f.center.clone()});
+        });
+
+        let shape;
+        if(this.type==='d6'){
+          const bb=geo.boundingBox; const hx=(bb.max.x-bb.min.x)/2, hy=(bb.max.y-bb.min.y)/2, hz=(bb.max.z-bb.min.z)/2;
+          shape=new CANNON.Box(new CANNON.Vec3(hx,hy,hz));
+        } else {
+          shape=cannonConvexFromGeometry(geo);
+        }
+        const mass = 1.2 * (this.type==='d20'?1.15:1.0);
+        const body=new CANNON.Body({mass, shape, material:defaultMat, linearDamping:0.01, angularDamping:0.01, sleepTimeLimit:0.25, sleepSpeedLimit:0.1});
+        body.position.copy(this.group.position);
+        world.addBody(body);
+        this.body=body;
+
+        body.addEventListener('collide', (e)=>{
+          const rel=e.contact.getImpactVelocityAlongNormal ? Math.abs(e.contact.getImpactVelocityAlongNormal()) : e.contact.bi.velocity.length();
+          if(rel>0.4){ AudioSys.click(clamp(rel*0.02,0.03,0.12), 160+rel*60); CameraShake.bump(rel*0.01); }
+        });
+      }
+      setLinearAndAngularVelocity(v3, w3){ this.body.velocity.copy(v3); this.body.angularVelocity.copy(w3); }
+      updateFromPhysics(){ this.group.position.copy(this.body.position); this.group.quaternion.copy(this.body.quaternion); if(this.resultSprite){ this.resultSprite.position.set(this.group.position.x, this.group.position.y + this.sizeY*0.9 + 0.4, this.group.position.z); } }
+      checkRest(){ const speed=this.body.velocity.length(); const rs=this.body.angularVelocity.length(); if(speed<0.05 && rs<0.05) this.asleepFrames++; else this.asleepFrames=0; if(!this.rested && this.asleepFrames>18){ this.rested=true; this.value=this._faceUpValue(); this._ensureResultBubble(); } }
+      _ensureResultBubble(){ if(this.resultSprite||this.value==null) return; let label=String(this.value); if(this.type==='d10T') label=(this.value===0?'00':String(this.value)); const tex=makeBubbleTexture(label); const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:true})); sprite.scale.set(0.9,0.9,0.9); sprite.position.set(this.group.position.x, this.group.position.y + this.sizeY*0.9 + 0.4, this.group.position.z); scene.add(sprite); this.resultSprite=sprite; this.resultSprite._tex=tex; }
+      _faceUpValue(){ let best=null, bestDot=-1; const up=new THREE.Vector3(0,1,0); for(const info of this.faceInfos){ const n=info.normal.clone().applyQuaternion(this.group.quaternion); const d=n.dot(up); if(d>bestDot){ bestDot=d; best=info; } } return best?best.value:null; }
+      dispose(){ if(this.resultSprite){ scene.remove(this.resultSprite); this.resultSprite.material.map?.dispose?.(); this.resultSprite.material.dispose?.(); this.resultSprite=null; } world.removeBody(this.body); scene.remove(this.group); this.group.traverse(o=>{ if(o.geometry) o.geometry.dispose?.(); if(o.material){ if(o.material.map) o.material.map.dispose?.(); o.material.dispose?.(); } }); }
+    }
+
+    // Camera shake system
+    const CameraShake = (()=>{ let amp=0; const base= new THREE.Vector3().copy(camera.position); function bump(x){ if(prefersReduced) return; amp=Math.min(0.5, amp+x); } function update(){ if(amp<=0.0001) return; amp*=0.90; camera.position.set(base.x + rand(-amp,amp), base.y + rand(-amp,amp), base.z + rand(-amp,amp)); } function reset(){ camera.position.copy(base); amp=0; } return {bump, update, reset}; })();
+
+    // ===== Dice / Roll manager =====
+    const Dice={ list:[], lastSpec:[], currentRoll:null, reportedRollId:null };
+    Dice.add=(die)=>{ scene.add(die.group); Dice.list.push(die); };
+    Dice.clear=()=>{ Dice.list.forEach(d=>d.dispose()); Dice.list.length=0; updateLastUI([], null); CameraShake.reset(); Dice.currentRoll=null; };
+    Dice.rerollLast=(origin=null, impulse=null)=>{ if(!Dice.lastSpec.length) return; Dice.clear(); spawnDiceBundle(Dice.lastSpec, origin, impulse); };
+
+    // ===== Drag & drop labels -> throw =====
+    const labelsEl=document.getElementById('labels');
+    let dragging=false; let dragStart=null; let dragNow=null; let dragBundle=[];
+
+    function inStage(x,y){ const rect=stageEl.getBoundingClientRect(); return x>=rect.left && x<=rect.right && y>=rect.top && y<=rect.bottom; }
+    function drawTrajectory(){ octx.clearRect(0,0,overlay.width,overlay.height); if(prefersReduced) return; if(!dragging||!dragStart||!dragNow) return; const dx=dragNow.x-dragStart.x, dy=dragNow.y-dragStart.y; const len=Math.hypot(dx,dy); const p0=dragStart, p1=dragNow; octx.lineWidth=3; octx.globalAlpha=.9; octx.strokeStyle='rgba(110,231,255,.9)'; octx.beginPath(); octx.moveTo(p0.x, p0.y); octx.lineTo(p1.x, p1.y); octx.stroke(); octx.beginPath(); const ah=10+clamp(len*0.05,0,24); const ang=Math.atan2(dy,dx); octx.moveTo(p1.x, p1.y); octx.lineTo(p1.x - Math.cos(ang-0.3)*ah, p1.y - Math.sin(ang-0.3)*ah); octx.moveTo(p1.x, p1.y); octx.lineTo(p1.x - Math.cos(ang+0.3)*ah, p1.y - Math.sin(ang+0.3)*ah); octx.stroke(); }
+
+    function addToBundleByElement(el){ if(!el) return; if(!el.classList?.contains('die-label')) return; const type=el.dataset.type; if(!dragBundle.includes(type)){ dragBundle.push(type); const b=document.createElement('div'); b.className='bundle-count'; b.textContent=dragBundle.length; el.appendChild(b); setTimeout(()=>b.remove(), 600); }}
+
+    function onPointerDown(e){ if(!(e.target.closest('.die-label'))) return; AudioSys.resume(); e.preventDefault(); dragging=true; document.body.classList.add('dragging'); dragBundle=[]; addToBundleByElement(e.target.closest('.die-label')); const pt={x:e.clientX, y:e.clientY}; dragStart=pt; dragNow=pt; drawTrajectory(); }
+    function onPointerMove(e){ if(!dragging) return; const pt={x:e.clientX, y:e.clientY}; dragNow=pt; drawTrajectory(); addToBundleByElement(document.elementFromPoint(e.clientX, e.clientY)); }
+    function onPointerUp(e){ if(!dragging) return; dragging=false; document.body.classList.remove('dragging'); octx.clearRect(0,0,overlay.width,overlay.height); if(dragBundle.length===0){ dragStart=dragNow=null; return; } const rect=stageEl.getBoundingClientRect(); if(inStage(e.clientX, e.clientY)){ const originScreen={x:e.clientX-rect.left, y:e.clientY-rect.top}; const dx=(dragNow.x-dragStart.x), dy=(dragNow.y-dragStart.y); const speed=clamp(Math.hypot(dx,dy)/180, 0.2, 2.8); const impulse=new THREE.Vector3(dx, -dy, -120).normalize().multiplyScalar(speed); spawnDiceBundle(dragBundle, originScreen, impulse); } dragStart=dragNow=null; dragBundle=[]; }
+
+    labelsEl.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    labelsEl.addEventListener('click', (e)=>{ const el=e.target.closest('.die-label'); if(!el) return; const type=el.dataset.type; const rect=stageEl.getBoundingClientRect(); const origin={x:rect.width/2, y:rect.height*0.3}; const impulse=new THREE.Vector3(rand(-1,1), 1, -1).normalize().multiplyScalar(rand(0.8,1.4)); spawnDiceBundle([type], origin, impulse); });
+
+    // ===== Spawning & throwing =====
+    const raycaster=new THREE.Raycaster(); const plane=new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+    function screenToGround(x,y){ const ndc=new THREE.Vector2((x/renderer.domElement.clientWidth)*2-1, -(y/renderer.domElement.clientHeight)*2+1); raycaster.setFromCamera(ndc, camera); const pt=new THREE.Vector3(); raycaster.ray.intersectPlane(plane, pt); return pt; }
+
+    function expandTypes(types){
+      const physical=[]; const groups=[];
+      for(const t of types){
+        if(t==='d100'){
+          // two dice: tens + units
+          const tens='d10T', units='d10U';
+          physical.push(tens, units);
+          groups.push({kind:'percentile', tens:tens, units:units});
+        } else {
+          physical.push(t); groups.push({kind:'single', type:t});
+        }
+      }
+      return {physical, groups};
+    }
+
+    function spawnDiceBundle(types, originScreen, impulse){
+      const {physical, groups}=expandTypes(types);
+      const origin3=screenToGround(originScreen.x, originScreen.y).add(new THREE.Vector3(0, 2.0, 0));
+      const spread=0.6; const sameImpulse=impulse.clone();
+      const items=[]; const id=(Date.now()+Math.random()).toString(36);
+      physical.forEach((t)=>{
+        const offset=new THREE.Vector3(rand(-spread,spread), rand(0.2,0.6), rand(-spread,spread));
+        const die=new Die(t,{position: origin3.clone().add(offset)});
+        Dice.add(die); items.push(die);
+        const lin=new CANNON.Vec3(sameImpulse.x + rand(-0.3,0.3), Math.abs(sameImpulse.y)+rand(0.2,0.6), sameImpulse.z + rand(-0.3,0.3));
+        const ang=new CANNON.Vec3(rand(-8,8), rand(-8,8), rand(-8,8));
+        die.setLinearAndAngularVelocity(lin, ang);
+      });
+      Dice.lastSpec=types.slice();
+      Dice.currentRoll={id, items, groups};
+    }
+
+    // ===== UI (results & history) =====
+    const lastEl=document.getElementById('last'); const sumEl=document.getElementById('sum'); const historyEl=document.getElementById('history');
+
+    function computeRollSummary(roll){
+      const values=[]; const labels=[]; let total=0;
+      const findDie=(code)=>roll.items.find(d=>d.type===code);
+      for(const g of roll.groups){
+        if(g.kind==='single'){
+          const die=roll.items.find(d=>d.type===g.type && d.rested);
+          if(!die) return null; values.push(die.value); labels.push(g.type); total+= +values.at(-1);
+        } else if(g.kind==='percentile'){
+          const td=findDie('d10T'); const ud=findDie('d10U');
+          if(!(td&&ud) || !(td.rested && ud.rested)) return null;
+          const tens=td.value; const units=ud.value;
+          const combined = (tens===0 && units===0) ? 100 : (tens + units);
+          values.push(combined);
+          labels.push('d100');
+          total+=combined;
+        }
+      }
+      return {values, labels, total};
+    }
+
+    function updateLastUI(values, types){ lastEl.innerHTML = values.length ? values.map((v,i)=>`<span class="chip">${types?types[i]:''}${types?':':''}${v}</span>`).join(' ') : '<span>—</span>'; sumEl.textContent= values.length? String(values.reduce((a,b)=>a+(+b||0),0)) : '—'; }
+    function pushHistory(values, types){ const div=document.createElement('div'); div.className='pill'; const label=types?types.join('+'):''; div.textContent = `${label} → ${values.join(', ')} (Σ ${values.reduce((a,b)=>a+(+b||0),0)})`; historyEl.prepend(div); }
+
+    document.getElementById('clear').addEventListener('click', ()=>Dice.clear());
+    document.getElementById('reroll').addEventListener('click', ()=>Dice.rerollLast());
+    window.addEventListener('keydown', (e)=>{ if(e.key==='r' || e.key==='R') Dice.rerollLast(); if(e.key==='c'||e.key==='C') Dice.clear(); });
+
+    // ===== Resize handling =====
+    function onResize(){ const w=stageEl.clientWidth, h=stageEl.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h,false); resizeOverlay(); }
+    new ResizeObserver(onResize).observe(stageEl);
+
+    // ===== Main loop =====
+    let lastT=performance.now();
+    function animate(){
+      requestAnimationFrame(animate);
+      const now=performance.now(); let dt=(now-lastT)/1000; lastT=now; dt=Math.min(0.033, dt);
+      const step=prefersReduced?1/50:1/60; world.step(step, dt, 3);
+      Dice.list.forEach(d=>{ d.updateFromPhysics(); d.checkRest(); });
+
+      // Report exactly once per roll id
+      if(Dice.currentRoll && Dice.currentRoll.id!==Dice.reportedRollId){
+        const summary=computeRollSummary(Dice.currentRoll);
+        if(summary){ updateLastUI(summary.values, summary.labels); pushHistory(summary.values, summary.labels); Dice.reportedRollId=Dice.currentRoll.id; }
+      }
+
+      controls.update(); CameraShake.update(); renderer.render(scene, camera);
+    }
+    animate();
+
+    // ===== Self-tests (expanded) =====
+    function verifyOutward(geometry){ const g=geometry.toNonIndexed(); const pos=g.attributes.position.array; let cx=0,cy=0,cz=0,count=0; for(let i=0;i<pos.length;i+=3){cx+=pos[i];cy+=pos[i+1];cz+=pos[i+2];count++;} cx/=count; cy/=count; cz/=count; for(let i=0;i<pos.length;i+=9){ const ax=pos[i], ay=pos[i+1], az=pos[i+2]; const bx=pos[i+3], by=pos[i+4], bz=pos[i+5]; const cx1=pos[i+6], cy1=pos[i+7], cz1=pos[i+8]; const abx=bx-ax, aby=by-ay, abz=bz-az; const acx=cx1-ax, acy=cy1-ay, acz=cz1-az; const nx=aby*acz - abz*acy; const ny=abz*acx - abx*acz; const nz=abx*acy - aby*acx; const fcx=(ax+bx+cx1)/3, fcy=(ay+by+cy1)/3, fcz=(az+bz+cz1)/3; const ox=fcx-cx, oy=fcy-cy, oz=fcz-cz; if(nx*ox + ny*oy + nz*oz < -1e-7) return false; } return true; }
+    function runSelfTests(){
+      const results=[]; const ok=(name)=>results.push({test:name, pass:true}); const bad=(name,e)=>results.push({test:name, pass:false, err:e?.message||String(e)});
+      try{ if(!THREE?.WebGLRenderer) throw new Error('THREE missing'); ok('three import'); }catch(e){ bad('three import',e); }
+      try{ if(!OrbitControls) throw new Error('OrbitControls missing'); ok('orbitcontrols import'); }catch(e){ bad('orbitcontrols import',e); }
+      try{
+        const types=['d4','d6','d8','d12','d20'];
+        for(const t of types){ const d=new Die(t,{position:new THREE.Vector3(99,99,99)}); if(d.faceInfos.length!==d._numbers().length) throw new Error(`${t}: faces ${d.faceInfos.length} != numbers ${d._numbers().length}`); if(!verifyOutward(d.mesh.geometry)) throw new Error(`${t}: inward triangle winding detected`); d.dispose(); }
+        ok('face mapping & outward winding (polyhedra)');
+      }catch(e){ bad('face mapping & outward winding (polyhedra)',e); }
+      try{
+        // d10 family must have exactly 10 faces with decals
+        const d=new Die('d10',{position:new THREE.Vector3(99,99,99)}); if(d.faceInfos.length!==10) throw new Error('d10 faces != 10'); d.dispose();
+        const dt=new Die('d10T',{position:new THREE.Vector3(99,99,99)}); if(dt.faceInfos.length!==10) throw new Error('d10T faces != 10'); dt.dispose();
+        const du=new Die('d10U',{position:new THREE.Vector3(99,99,99)}); if(du.faceInfos.length!==10) throw new Error('d10U faces != 10'); du.dispose();
+        ok('d10 family face count = 10');
+      }catch(e){ bad('d10 family face count = 10', e); }
+      try{ const d10=createD10(0.95); const s=cannonConvexFromGeometry(d10.geometry); if(!s || !s.faces?.length) throw new Error('convex build failed'); ok('convex build (d10)'); }catch(e){ bad('convex build (d10)', e); }
+      try{ // Percentile composition rules
+        const roll={id:'t', items:[{type:'d10T', rested:true, value:0},{type:'d10U', rested:true, value:0}], groups:[{kind:'percentile', tens:'d10T', units:'d10U'}]};
+        const s1=computeRollSummary(roll); if(!s1 || s1.values[0]!==100) throw new Error('00+0 should be 100');
+        roll.items=[{type:'d10T', rested:true, value:50},{type:'d10U', rested:true, value:7}]; const s2=computeRollSummary(roll); if(s2.values[0]!==57) throw new Error('50+7 should be 57');
+        ok('percentile combination');
+      }catch(e){ bad('percentile combination', e); }
+      console.table(results);
+      const pill=document.createElement('div'); pill.className='pill'; pill.textContent=results.every(r=>r.pass)?'Diagnostics: OK':'Diagnostics: Issues (see console)'; historyEl.prepend(pill);
+    }
+
+    // ===== Initial help (non-blocking) =====
+    resizeOverlay(); onResize(); runSelfTests();
+  </script>
+</body>
+</html>
